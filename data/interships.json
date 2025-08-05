@@ -1,0 +1,39 @@
+[
+  {
+    "title": "Web Dev Intern",
+    "company": "TechNova",
+    "location": "Bangalore",
+    "domain": "Web Development"
+  },
+  {
+    "title": "Data Analyst Intern",
+    "company": "DataHive",
+    "location": "Remote",
+    "domain": "Data Science"
+  },
+  {
+    "title": "UI/UX Intern",
+    "company": "DesignStudio",
+    "location": "Mumbai",
+    "domain": "UI/UX Design"
+  },
+  {
+    "title": "ML Intern",
+    "company": "AI Labs",
+    "location": "Remote",
+    "domain": "Machine Learning"
+  },
+  {
+    "title": "Cloud Intern",
+    "company": "CloudCore",
+    "location": "Hyderabad",
+    "domain": "Cloud Computing"
+  },
+  {
+    "title": "Cybersecurity Intern",
+    "company": "SecureNet",
+    "location": "Delhi",
+    "domain": "Cybersecurity"
+  }
+]
+
