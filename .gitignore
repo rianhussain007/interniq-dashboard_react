@@ -1,0 +1,6 @@
+﻿node_modules/
+drivers/
+build/
+dist/
+.next/
+.env

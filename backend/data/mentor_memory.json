@@ -1,0 +1,22 @@
+[
+  {
+    "id": "profile-focus",
+    "title": "Rian's Career Focus",
+    "content": "Rian is preparing for student data scientist and developer internships. Advice should prioritize Python, React, TypeScript, machine learning projects, dashboards, GitHub portfolio quality, resume proof points, and interview readiness."
+  },
+  {
+    "id": "resume-guidance",
+    "title": "Resume Guidance",
+    "content": "Strong resume feedback should mention measurable project impact, tools used, dataset scale, model or dashboard outcomes, and ATS-friendly keywords for data science and frontend roles."
+  },
+  {
+    "id": "portfolio-guidance",
+    "title": "Portfolio Guidance",
+    "content": "Portfolio guidance should encourage pinned GitHub repositories, clear README files, screenshots, live demos when possible, concise project summaries, and explanations of business or research problems solved."
+  },
+  {
+    "id": "interview-guidance",
+    "title": "Interview Guidance",
+    "content": "Interview preparation should include STAR stories, debugging stories, project walkthroughs, SQL and Python practice, React fundamentals, and concise explanations of machine learning tradeoffs."
+  }
+]

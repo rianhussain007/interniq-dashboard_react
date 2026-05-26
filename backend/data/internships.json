@@ -1,0 +1,9 @@
+[{
+    "id": "1",
+    "title": "Sample Internship",
+    "company": "Sample Company",
+    "location": "Remote",
+    "stipend": "$2000/month",
+    "apply_link": "https://example.com/apply",
+    "source": "LinkedIn"
+}]
