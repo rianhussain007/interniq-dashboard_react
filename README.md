@@ -143,3 +143,7 @@ cd interniq-dashboard_react
 -   **Automation:** The deployment process is automated through Git, making updates simple and reliable.
 
 Your InternIQ dashboard is now fully prepared for the world. Let me know if you have any other questions!
+
+Still in Development!
+
+Access Link: https://interniq.netlify.app/
