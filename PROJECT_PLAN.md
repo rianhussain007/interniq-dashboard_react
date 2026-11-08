@@ -33,7 +33,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 
 ### A. Full local and UI verification
 
-- [x] Final local frontend lint/build, 15 backend tests, and diff checks pass. GitHub CI passed for `c912965` ([run](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42503155730)); the added mentor-route contract test is queued for CI on the next push.
+- [x] Final local frontend lint/build, 15 backend tests, and diff checks pass. GitHub CI, including the mentor-route contract test and backend container build, passed for `1898f38` ([run](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42503794993)).
 - [ ] Exercise every career-tool route, responsive layout, print output, invalid PDF cases, and protected-route return paths in a browser.
 - [ ] Add or run automated frontend interaction coverage for the new tools and main student journey.
 - [x] Remove unmounted legacy pages/layouts that duplicated current routes or exposed stale links; document the remaining manual external-API probes.
@@ -75,7 +75,7 @@ Do not raise the rating on the basis of added code, a successful build, or mocke
 
 ## Time estimate and dependencies
 
-- The implementation-only prototype increment described above is complete in this working session. Commit `19ae24c` is pushed to `main`; local lint/build and 15 backend tests pass. The added mentor-route test must pass GitHub CI before final verification. Live staging and production remain gated on external services and credentials.
+- The implementation-only prototype increment described above is complete in this working session. Commit `1898f38` is pushed to `main`; local lint/build, 15 backend tests, and GitHub CI pass. Live staging and production remain gated on external services and credentials.
 - A first staging integration pass is estimated at **0.5–1.5 focused days after** valid database, model-provider, auth, and cloud access are available. Provider approval, database provisioning, or source-site changes can extend that calendar time.
 - Production launch time is not responsibly estimable until staging results, product acceptance, monitoring, and operating ownership are known.
 - At the last workspace audit, `.env`, provider credentials, a live PostgreSQL/pgvector instance, and cloud project access were unavailable. No TRL above the local prototype level is supported by evidence yet.
