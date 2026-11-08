@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bookmark, CheckCircle2, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
+import { Bookmark, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { apiRequest, internshipSearchPath, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 const InternshipCard = ({
@@ -32,6 +32,12 @@ const InternshipCard = ({
         <Briefcase className="h-4 w-4 mr-2 flex-shrink-0" />
         <span>{internship.stipend || internship.mode || 'Not Disclosed'}</span>
       </div>
+      {internship.last_seen_at && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <Clock3 className="h-3.5 w-3.5" />
+          <span>Last seen {new Date(internship.last_seen_at).toLocaleDateString()}</span>
+        </div>
+      )}
       {internship.skills && internship.skills.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {internship.skills.slice(0, 4).map((skill) => (

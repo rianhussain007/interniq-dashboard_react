@@ -10,6 +10,7 @@ export type Internship = {
   skills?: string[];
   apply_link: string | null;
   source: 'LinkedIn' | 'Internshala' | 'Naukri' | string;
+  last_seen_at?: string | null;
   posted_date?: string | null;
   deadline?: string | null;
   description?: string;

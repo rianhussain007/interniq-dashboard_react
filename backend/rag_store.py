@@ -171,7 +171,14 @@ def upsert_knowledge_documents(
 
 def index_internships(conn: Connection, embedder: GeminiEmbeddingClient) -> int:
     with conn.cursor() as cur:
-        cur.execute("select * from internships order by updated_at desc")
+        cur.execute(
+            """
+            select * from internships
+            where last_seen_at >= now() - interval '30 days'
+              and (deadline is null or deadline >= current_date)
+            order by updated_at desc
+            """
+        )
         rows = cur.fetchall()
 
     sources = [
@@ -189,7 +196,22 @@ def index_internships(conn: Connection, embedder: GeminiEmbeddingClient) -> int:
         }
         for row in rows
     ]
-    return upsert_knowledge_documents(conn, embedder, sources)
+    indexed = upsert_knowledge_documents(conn, embedder, sources)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            delete from knowledge_documents as document
+            where document.source_type = 'internship'
+              and not exists (
+                  select 1
+                  from internships as internship
+                  where internship.id::text = document.source_id
+                    and internship.last_seen_at >= now() - interval '30 days'
+                    and (internship.deadline is null or internship.deadline >= current_date)
+              )
+            """
+        )
+    return indexed
 
 
 def index_career_guidance(conn: Connection, embedder: GeminiEmbeddingClient) -> int:
@@ -335,6 +357,16 @@ def retrieve_context(
             from knowledge_documents
             where embedding_model = %s
               and (user_id is null or user_id = %s)
+              and (
+                  source_type <> 'internship'
+                  or exists (
+                      select 1
+                      from internships as internship
+                      where internship.id::text = knowledge_documents.source_id
+                        and internship.last_seen_at >= now() - interval '30 days'
+                        and (internship.deadline is null or internship.deadline >= current_date)
+                  )
+              )
             order by embedding <=> %s::vector
             limit %s
             """,

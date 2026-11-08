@@ -121,6 +121,7 @@ def row_to_internship(row: dict[str, Any]) -> dict[str, Any]:
         "skills": row.get("skills") or [],
         "source": row["source"],
         "apply_link": clean_apply_link(row.get("apply_link")),
+        "last_seen_at": row["last_seen_at"].isoformat() if row.get("last_seen_at") else None,
         "posted_date": row["posted_date"].isoformat() if row.get("posted_date") else None,
         "deadline": row["deadline"].isoformat() if row.get("deadline") else None,
         "description": row.get("description") or "",
@@ -155,7 +156,8 @@ def upsert_internship(conn: Connection, raw: dict[str, Any]) -> dict[str, Any]:
                 posted_date = coalesce(excluded.posted_date, internships.posted_date),
                 deadline = coalesce(excluded.deadline, internships.deadline),
                 description = coalesce(excluded.description, internships.description),
-                updated_at = now()
+                updated_at = now(),
+                last_seen_at = now()
             returning *
             """,
             internship,
@@ -180,6 +182,8 @@ def list_internships(conn: Connection, limit: int = 100, offset: int = 0) -> lis
         cur.execute(
             """
             select * from internships
+            where last_seen_at >= now() - interval '30 days'
+              and (deadline is null or deadline >= current_date)
             order by coalesce(posted_date, created_at::date) desc, created_at desc
             limit %s offset %s
             """,
@@ -196,7 +200,10 @@ def search_internships(
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    filters = []
+    filters = [
+        "last_seen_at >= now() - interval '30 days'",
+        "(deadline is null or deadline >= current_date)",
+    ]
     params: list[Any] = []
 
     if query:

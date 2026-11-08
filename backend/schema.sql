@@ -16,7 +16,8 @@ create table if not exists public.internships (
   description text,
   dedupe_key text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  last_seen_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 alter table public.internships add column if not exists mode text;
@@ -26,6 +27,7 @@ alter table public.internships add column if not exists deadline date;
 alter table public.internships add column if not exists description text;
 alter table public.internships add column if not exists dedupe_key text;
 alter table public.internships add column if not exists updated_at timestamp with time zone default now();
+alter table public.internships add column if not exists last_seen_at timestamp with time zone;
 
 do $$
 begin
@@ -39,6 +41,9 @@ end $$;
 
 update public.internships set source = 'Unknown' where source is null;
 update public.internships set updated_at = coalesce(updated_at, created_at, now()) where updated_at is null;
+update public.internships
+set last_seen_at = coalesce(last_seen_at, updated_at, created_at, now())
+where last_seen_at is null;
 -- Earlier scraper imports stored the job title itself as a skill.
 update public.internships
 set skills = '{}'::text[]
@@ -76,6 +81,8 @@ alter table public.internships alter column source set default 'Unknown';
 alter table public.internships alter column source set not null;
 alter table public.internships alter column updated_at set default now();
 alter table public.internships alter column updated_at set not null;
+alter table public.internships alter column last_seen_at set default now();
+alter table public.internships alter column last_seen_at set not null;
 alter table public.internships alter column dedupe_key set not null;
 
 create unique index if not exists internships_dedupe_key_unique_idx
@@ -84,6 +91,7 @@ create unique index if not exists internships_dedupe_key_unique_idx
 create index if not exists internships_source_idx on public.internships (source);
 create index if not exists internships_location_idx on public.internships (location);
 create index if not exists internships_posted_date_idx on public.internships (posted_date desc);
+create index if not exists internships_last_seen_idx on public.internships (last_seen_at desc);
 create index if not exists internships_skills_gin_idx on public.internships using gin (skills);
 
 create unique index if not exists internships_apply_link_unique_idx

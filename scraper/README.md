@@ -22,6 +22,8 @@ After the scraper upserts postings, it automatically chunks and indexes internsh
 
 Each source reports `ok`, `empty`, or `failed`. The job emits a structured JSON event (`event: interniq_scrape_summary`) with per-source counts and database/index totals for Cloud Run Logs. A run with some successful sources and some empty or failed sources is marked `partial`; a run with no usable records exits non-zero so it is not mistaken for a refresh.
 
+Internships are visible in search and mentor recommendations only while the source has been seen within the last 30 days and any listed deadline has not passed. The schema migration backfills `last_seen_at`; each successful upsert refreshes it. Reindexing removes expired internship chunks from pgvector, and retrieval filters them immediately even before the next reindex.
+
 The FastAPI backend exposes the same update flow and requires `INTERNIQ_ADMIN_TOKEN`:
 
 ```bash
