@@ -25,6 +25,7 @@ from internships_store import (
     list_applications,
     list_internships,
     list_saved_internships,
+    remove_saved_internship,
     save_internship,
     search_internships,
     save_user_checklist as store_user_checklist,
@@ -476,6 +477,20 @@ def list_saved_internships_route(
     try:
         with get_db_connection() as conn:
             return list_saved_internships(conn, user_id)
+    except Exception as exc:
+        raise db_http_error(exc) from exc
+
+
+@app.delete("/api/saved/{internship_id}")
+def remove_saved_internship_route(
+    internship_id: UUID,
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    user_id = authenticated_user_id(current_user)
+    try:
+        with get_db_connection() as conn:
+            removed = remove_saved_internship(conn, user_id, internship_id)
+            return {"removed": removed}
     except Exception as exc:
         raise db_http_error(exc) from exc
 

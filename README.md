@@ -161,6 +161,7 @@ Current routes:
 - `POST /api/internships/update`
 - `GET /api/saved?user_id=...`
 - `POST /api/saved`
+- `DELETE /api/saved/{internship_id}`
 - `GET /api/applications?user_id=...`
 - `POST /api/applications`
 - `POST /api/mentor-chat`

@@ -255,6 +255,15 @@ def save_internship(conn: Connection, user_id: str, internship_id: UUID) -> dict
         }
 
 
+def remove_saved_internship(conn: Connection, user_id: str, internship_id: UUID) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            "delete from saved_internships where user_id = %s and internship_id = %s returning id",
+            (user_id, internship_id),
+        )
+        return cur.fetchone() is not None
+
+
 def list_saved_internships(conn: Connection, user_id: str) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(

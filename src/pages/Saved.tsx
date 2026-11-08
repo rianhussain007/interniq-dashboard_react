@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bookmark, ExternalLink, Loader2 } from 'lucide-react';
+import { Bookmark, ExternalLink, Loader2, Trash2 } from 'lucide-react';
 import { apiRequest, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,6 +8,8 @@ export default function Saved() {
   const [saved, setSaved] = useState<Internship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchSaved = async () => {
@@ -27,6 +29,23 @@ export default function Saved() {
     fetchSaved();
   }, [user?.id]);
 
+  const removeSaved = async (internshipId: string) => {
+    setActionError(null);
+    setRemoving((current) => ({ ...current, [internshipId]: true }));
+    try {
+      await apiRequest(`/api/saved/${encodeURIComponent(internshipId)}`, { method: 'DELETE' });
+      setSaved((current) => current.filter((internship) => internship.id !== internshipId));
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Could not remove saved internship.');
+    } finally {
+      setRemoving((current) => {
+        const next = { ...current };
+        delete next[internshipId];
+        return next;
+      });
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-950 dark:bg-gray-900 dark:text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -39,6 +58,12 @@ export default function Saved() {
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Bookmarked roles you can revisit and compare.</p>
           </div>
         </div>
+
+        {actionError && (
+          <div role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {actionError}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center gap-2 text-gray-500">
@@ -68,7 +93,7 @@ export default function Saved() {
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{internship.location || 'Location not specified'}</p>
-                <div className="mt-5">
+                <div className="mt-5 flex flex-wrap items-center gap-3">
                   {internship.apply_link ? (
                     <a
                       href={internship.apply_link}
@@ -82,6 +107,16 @@ export default function Saved() {
                   ) : (
                     <span className="text-sm text-gray-500 dark:text-gray-400">Posting link unavailable</span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => void removeSaved(internship.id)}
+                    disabled={removing[internship.id]}
+                    aria-label={`Remove ${internship.title} from saved internships`}
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    {removing[internship.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {removing[internship.id] ? 'Removing…' : 'Remove'}
+                  </button>
                 </div>
               </article>
             ))}

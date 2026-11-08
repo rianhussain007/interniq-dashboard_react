@@ -56,9 +56,9 @@ const InternshipCard = ({
         onClick={() => onSave(internship.id)}
         disabled={pendingActions[`${internship.id}:save`]}
         className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
-        aria-label={actionState?.saved ? `${internship.title} saved` : `Save ${internship.title}`}
+        aria-label={actionState?.saved ? `Remove ${internship.title} from saved internships` : `Save ${internship.title}`}
         aria-pressed={Boolean(actionState?.saved)}
-        title={actionState?.saved ? 'Saved' : 'Save internship'}
+        title={actionState?.saved ? 'Remove from saved' : 'Save internship'}
       >
         {pendingActions[`${internship.id}:save`] ? <Loader2 className="h-4 w-4 animate-spin" /> : actionState?.saved ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Bookmark className="h-4 w-4" />}
       </button>
@@ -244,16 +244,21 @@ export const InternshipFeed = () => {
       return;
     }
     const actionKey = `${internshipId}:save`;
+    const isSaved = Boolean(actionState[internshipId]?.saved);
     setActionError(null);
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
-      await apiRequest('/api/saved', {
-        method: 'POST',
-        body: JSON.stringify({ user_id: user.id, internship_id: internshipId }),
-      });
+      if (isSaved) {
+        await apiRequest(`/api/saved/${encodeURIComponent(internshipId)}`, { method: 'DELETE' });
+      } else {
+        await apiRequest('/api/saved', {
+          method: 'POST',
+          body: JSON.stringify({ user_id: user.id, internship_id: internshipId }),
+        });
+      }
       setActionState((current) => ({
         ...current,
-        [internshipId]: { ...current[internshipId], saved: true },
+        [internshipId]: { ...current[internshipId], saved: !isSaved },
       }));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not save internship.');
