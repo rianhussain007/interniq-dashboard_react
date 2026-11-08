@@ -206,13 +206,32 @@ def search_internships(
         "(deadline is null or deadline >= current_date)",
     ]
     params: list[Any] = []
+    relevance_order = ""
+    relevance_params: list[Any] = []
 
     if query:
         filters.append(
-            "(title ilike %s or company ilike %s or exists (select 1 from unnest(skills) skill where skill ilike %s))"
+            "(title ilike %s or company ilike %s "
+            "or exists (select 1 from unnest(skills) skill where skill ilike %s) "
+            "or coalesce(location, '') ilike %s or coalesce(mode, '') ilike %s "
+            "or coalesce(stipend, '') ilike %s or coalesce(description, '') ilike %s)"
         )
         like_query = f"%{query}%"
-        params.extend([like_query, like_query, like_query])
+        params.extend([like_query] * 7)
+        relevance_order = """
+            case
+                when lower(title) = lower(%s) then 0
+                when title ilike %s then 1
+                when company ilike %s then 2
+                when exists (select 1 from unnest(skills) skill where skill ilike %s) then 3
+                when coalesce(location, '') ilike %s
+                  or coalesce(mode, '') ilike %s
+                  or coalesce(stipend, '') ilike %s then 4
+                when coalesce(description, '') ilike %s then 5
+                else 6
+            end,
+        """
+        relevance_params = [query, like_query, like_query, like_query, like_query, like_query, like_query, like_query]
     if location:
         filters.append("location ilike %s")
         params.append(f"%{location}%")
@@ -224,6 +243,7 @@ def search_internships(
         params.append(f"%{mode}%")
 
     where_clause = f"where {' and '.join(filters)}" if filters else ""
+    params.extend(relevance_params)
     params.extend([limit, offset])
 
     with conn.cursor() as cur:
@@ -231,7 +251,7 @@ def search_internships(
             f"""
             select * from internships
             {where_clause}
-            order by coalesce(posted_date, created_at::date) desc, created_at desc
+            order by {relevance_order} coalesce(posted_date, created_at::date) desc, created_at desc
             limit %s offset %s
             """,
             params,
