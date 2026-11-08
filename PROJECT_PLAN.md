@@ -8,7 +8,7 @@ Assessment date: 2026-11-08. This is an evidence-based engineering estimate for 
 | --- | ---: | --- | --- |
 | Agentic aggregator prototype | 80% | Scraper normalization, chunking, embedding/index interfaces, pgvector retrieval, structured mentor output, search filters, and deterministic unit/API tests are implemented. Public feed and guest sign-in prompt were checked in a browser against a local sample API. | No configured database/model/auth provider, so no real scrape → index → retrieve → grounded answer run or authenticated user journey has been exercised. |
 | Whole dashboard prototype | 80% | Core dashboard, search, saved/application flows, resume analyzer, and all six previously empty career-tool routes now have usable workflows. Six frontend interaction tests and strict TypeScript checking cover the career tools and app source. | Protected user flows still need a complete browser pass with a configured account; the internship-to-mentor journey has no automated frontend test. |
-| Production readiness | 45% | CI is configured for frontend lint, strict type-checking, six simulated-browser interaction tests, build, 15 deterministic backend tests, Python syntax checks, and a backend container build. Those checks pass locally, and `npm audit` reports zero vulnerabilities. | No provisioned staging environment, live-provider evidence, deployed app, production secrets, monitoring/alert checks, recovery exercise, or user acceptance results. |
+| Production readiness | 45% | GitHub CI passed for `9ed55bc`, including frontend lint, strict type-checking, six simulated-browser interaction tests, build, 15 deterministic backend tests, Python syntax checks, and backend container build. `npm audit` reports zero vulnerabilities. | No provisioned staging environment, live-provider evidence, deployed app, production secrets, monitoring/alert checks, recovery exercise, or user acceptance results. |
 
 These estimates track implementation and operating evidence separately. A compiled feature is not counted as a live integration. The prototype can be demonstrated today with controlled sample data; the current workspace cannot honestly demonstrate a live end-to-end service.
 
@@ -35,7 +35,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 
 ### A. Full local and UI verification
 
-- [x] Final local frontend lint/typecheck/build, six frontend interaction tests, 15 backend tests, diff checks, and `npm audit` pass. GitHub CI is being updated to run the new frontend checks.
+- [x] Final local frontend lint/typecheck/build, six frontend interaction tests, 15 backend tests, diff checks, and `npm audit` pass. GitHub CI passed for commit `9ed55bc` ([run](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42505454691)).
 - [ ] Exercise every career-tool route, responsive layout, print output, invalid PDF cases, and protected-route return paths in a browser.
 - [x] Add automated frontend interaction coverage for all six career tools.
 - [ ] Add automated frontend coverage for authenticated search, save/application, and mentor flows.
@@ -78,7 +78,7 @@ Do not raise the rating on the basis of added code, a successful build, or mocke
 
 ## Time estimate and dependencies
 
-- Six career-tool interaction tests and strict frontend type-checking pass locally and are being added to CI. Live staging and production remain gated on external services and credentials.
+- Six career-tool interaction tests and strict frontend type-checking pass locally and in GitHub CI on `9ed55bc`. Live staging and production remain gated on external services and credentials.
 - A first staging integration pass is estimated at **0.5–1.5 focused days after** valid database, model-provider, auth, and cloud access are available. Provider approval, database provisioning, or source-site changes can extend that calendar time.
 - Production launch time is not responsibly estimable until staging results, product acceptance, monitoring, and operating ownership are known.
 - At the last workspace audit, `.env`, provider credentials, a live PostgreSQL/pgvector instance, and cloud project access were unavailable. No TRL above the local prototype level is supported by evidence yet.
