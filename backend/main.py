@@ -380,6 +380,7 @@ def search_internships_route(
     location: str | None = Query(default=None, min_length=1),
     source: str | None = Query(default=None, min_length=1),
     mode: str | None = Query(default=None, min_length=1, max_length=50),
+    sort: Literal["relevance", "recent", "deadline"] = Query(default="relevance"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
@@ -391,6 +392,7 @@ def search_internships_route(
                 location=location,
                 source=source,
                 mode=mode,
+                sort=sort,
                 limit=limit,
                 offset=offset,
             )
@@ -404,6 +406,7 @@ def semantic_search_internships_route(
     location: str | None = Query(default=None, min_length=1, max_length=200),
     source: str | None = Query(default=None, min_length=1, max_length=100),
     mode: str | None = Query(default=None, min_length=1, max_length=50),
+    sort: Literal["relevance", "recent", "deadline"] = Query(default="relevance"),
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     _current_user: dict[str, Any] = Depends(require_authenticated_user),
@@ -422,6 +425,7 @@ def semantic_search_internships_route(
                 location=location,
                 source=source,
                 mode=mode,
+                sort=sort,
                 limit=limit,
                 offset=offset,
             )

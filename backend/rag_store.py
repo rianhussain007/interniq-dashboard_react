@@ -221,6 +221,7 @@ def search_internships_semantic(
     location: str | None = None,
     source: str | None = None,
     mode: str | None = None,
+    sort: str = "relevance",
     limit: int = 24,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
@@ -245,6 +246,12 @@ def search_internships_semantic(
         params.append(f"%{mode}%")
 
     params.extend([limit, offset])
+    if sort == "deadline":
+        order_by = "deadline asc nulls last, distance, coalesce(posted_date, created_at::date) desc, created_at desc"
+    elif sort == "recent":
+        order_by = "coalesce(posted_date, created_at::date) desc, distance, created_at desc"
+    else:
+        order_by = "distance, coalesce(posted_date, created_at::date) desc, created_at desc"
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -264,7 +271,7 @@ def search_internships_semantic(
             )
             select *, 1 - distance as similarity
             from best_matches
-            order by distance, coalesce(posted_date, created_at::date) desc, created_at desc
+            order by {order_by}
             limit %s offset %s
             """,
             (query_vector, *params),

@@ -198,6 +198,7 @@ def search_internships(
     location: str | None = None,
     source: str | None = None,
     mode: str | None = None,
+    sort: str = "relevance",
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
@@ -243,15 +244,22 @@ def search_internships(
         params.append(f"%{mode}%")
 
     where_clause = f"where {' and '.join(filters)}" if filters else ""
-    params.extend(relevance_params)
+    if sort == "relevance":
+        params.extend(relevance_params)
     params.extend([limit, offset])
+    if sort == "deadline":
+        order_by = "deadline asc nulls last, coalesce(posted_date, created_at::date) desc, created_at desc"
+    elif sort == "recent" or not query:
+        order_by = "coalesce(posted_date, created_at::date) desc, created_at desc"
+    else:
+        order_by = f"{relevance_order} coalesce(posted_date, created_at::date) desc, created_at desc"
 
     with conn.cursor() as cur:
         cur.execute(
             f"""
             select * from internships
             {where_clause}
-            order by {relevance_order} coalesce(posted_date, created_at::date) desc, created_at desc
+            order by {order_by}
             limit %s offset %s
             """,
             params,

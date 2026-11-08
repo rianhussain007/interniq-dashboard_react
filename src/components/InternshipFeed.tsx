@@ -115,6 +115,7 @@ export const InternshipFeed = () => {
   const [location, setLocation] = useState('');
   const [source, setSource] = useState('All');
   const [mode, setMode] = useState('All');
+  const [sort, setSort] = useState('relevance');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -156,6 +157,7 @@ export const InternshipFeed = () => {
           location: location.trim() || undefined,
           source,
           mode,
+          sort,
           limit: PAGE_SIZE,
           offset: 0,
         };
@@ -184,7 +186,7 @@ export const InternshipFeed = () => {
       controller.abort();
       paginationController.current?.abort();
     };
-  }, [searchTerm, searchMode, location, source, mode, retryCount]);
+  }, [searchTerm, searchMode, location, source, mode, sort, retryCount]);
 
   const loadMore = async () => {
     if (!hasMore || loadingMore) return;
@@ -200,6 +202,7 @@ export const InternshipFeed = () => {
         location: location.trim() || undefined,
         source,
         mode,
+        sort,
         limit: PAGE_SIZE,
         offset,
       };
@@ -405,6 +408,19 @@ export const InternshipFeed = () => {
                     <option>Remote</option>
                     <option>Hybrid</option>
                     <option>On-site</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="sort-results" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sort results</label>
+                  <select
+                    id="sort-results"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option value="relevance">Most relevant</option>
+                    <option value="recent">Recently posted</option>
+                    <option value="deadline">Closing soon</option>
                   </select>
                 </div>
               </div>
