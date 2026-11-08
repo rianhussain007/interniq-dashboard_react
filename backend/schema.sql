@@ -39,6 +39,11 @@ end $$;
 
 update public.internships set source = 'Unknown' where source is null;
 update public.internships set updated_at = coalesce(updated_at, created_at, now()) where updated_at is null;
+-- Earlier scraper imports stored the job title itself as a skill.
+update public.internships
+set skills = '{}'::text[]
+where cardinality(skills) = 1
+  and lower(trim(skills[1])) = lower(trim(title));
 
 with candidates as (
   select

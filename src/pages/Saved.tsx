@@ -69,15 +69,19 @@ export default function Saved() {
                 </div>
                 <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{internship.location || 'Location not specified'}</p>
                 <div className="mt-5">
-                  <a
-                    href={internship.apply_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                  >
-                    Open posting
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
+                  {internship.apply_link ? (
+                    <a
+                      href={internship.apply_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                    >
+                      Open posting
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  ) : (
+                    <span className="text-sm text-gray-500 dark:text-gray-400">Posting link unavailable</span>
+                  )}
                 </div>
               </article>
             ))}

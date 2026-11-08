@@ -63,15 +63,27 @@ const InternshipCard = ({
       >
         {pendingActions[`${internship.id}:track`] ? <Loader2 className="h-4 w-4 animate-spin" /> : actionState?.applied ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <FileCheck className="h-4 w-4" />}
       </button>
-      <a
-        href={internship.apply_link}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
-        aria-label={`Open application link for ${internship.title}`}
-      >
-        <ExternalLink className="h-4 w-4" />
-      </a>
+      {internship.apply_link ? (
+        <a
+          href={internship.apply_link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+          aria-label={`Open application link for ${internship.title}`}
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      ) : (
+        <button
+          type="button"
+          disabled
+          title="Application link unavailable"
+          aria-label={`Application link unavailable for ${internship.title}`}
+          className="inline-flex cursor-not-allowed items-center justify-center rounded-lg bg-gray-300 px-3 py-2 text-sm font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </button>
+      )}
     </div>
   </div>
 );

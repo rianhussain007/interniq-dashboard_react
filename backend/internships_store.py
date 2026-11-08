@@ -4,6 +4,7 @@ import re
 from datetime import date
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from psycopg import Connection
@@ -44,6 +45,20 @@ def normalize_skills(value: Any) -> list[str]:
     return []
 
 
+def clean_apply_link(value: Any) -> str | None:
+    link = clean_text(value)
+    if not link or link == "#":
+        return None
+    try:
+        parsed = urlsplit(link)
+        hostname = parsed.hostname
+    except ValueError:
+        return None
+    if parsed.scheme not in {"http", "https"} or not hostname:
+        return None
+    return link
+
+
 def infer_mode(raw: dict[str, Any]) -> str | None:
     mode = clean_text(raw.get("mode"))
     if mode:
@@ -58,8 +73,8 @@ def infer_mode(raw: dict[str, Any]) -> str | None:
 
 
 def build_dedupe_key(raw: dict[str, Any]) -> str:
-    apply_link = clean_text(raw.get("apply_link") or raw.get("link"))
-    if apply_link and apply_link != "#":
+    apply_link = clean_apply_link(raw.get("apply_link") or raw.get("link"))
+    if apply_link:
         return f"link:{apply_link.lower()}"
 
     title = clean_text(raw.get("title")) or ""
@@ -75,7 +90,10 @@ def normalize_internship(raw: dict[str, Any]) -> dict[str, Any]:
     if not title or not company:
         raise ValueError("Internship requires title and company.")
 
-    skills = normalize_skills(raw.get("skills") or raw.get("requirements") or raw.get("domain"))
+    # A domain/category is not a skill. In particular, legacy scrapers used the
+    # internship title as `domain`, which made every title appear as a skill tag.
+    skills = normalize_skills(raw.get("skills") or raw.get("requirements"))
+    apply_link = clean_apply_link(raw.get("apply_link") or raw.get("link"))
     return {
         "title": title,
         "company": company,
@@ -84,7 +102,7 @@ def normalize_internship(raw: dict[str, Any]) -> dict[str, Any]:
         "stipend": clean_text(raw.get("stipend")),
         "skills": skills,
         "source": clean_text(raw.get("source")) or "Unknown",
-        "apply_link": clean_text(raw.get("apply_link") or raw.get("link")),
+        "apply_link": apply_link,
         "posted_date": parse_date(raw.get("posted_date")),
         "deadline": parse_date(raw.get("deadline")),
         "description": clean_text(raw.get("description")),
@@ -102,7 +120,7 @@ def row_to_internship(row: dict[str, Any]) -> dict[str, Any]:
         "stipend": row.get("stipend") or "",
         "skills": row.get("skills") or [],
         "source": row["source"],
-        "apply_link": row.get("apply_link") or "#",
+        "apply_link": clean_apply_link(row.get("apply_link")),
         "posted_date": row["posted_date"].isoformat() if row.get("posted_date") else None,
         "deadline": row["deadline"].isoformat() if row.get("deadline") else None,
         "description": row.get("description") or "",
@@ -125,15 +143,18 @@ def upsert_internship(conn: Connection, raw: dict[str, Any]) -> dict[str, Any]:
             on conflict (dedupe_key) do update set
                 title = excluded.title,
                 company = excluded.company,
-                location = excluded.location,
-                mode = excluded.mode,
-                stipend = excluded.stipend,
-                skills = excluded.skills,
+                location = coalesce(excluded.location, internships.location),
+                mode = coalesce(excluded.mode, internships.mode),
+                stipend = coalesce(excluded.stipend, internships.stipend),
+                skills = case
+                    when cardinality(excluded.skills) > 0 then excluded.skills
+                    else internships.skills
+                end,
                 source = excluded.source,
-                apply_link = excluded.apply_link,
-                posted_date = excluded.posted_date,
-                deadline = excluded.deadline,
-                description = excluded.description,
+                apply_link = coalesce(excluded.apply_link, internships.apply_link),
+                posted_date = coalesce(excluded.posted_date, internships.posted_date),
+                deadline = coalesce(excluded.deadline, internships.deadline),
+                description = coalesce(excluded.description, internships.description),
                 updated_at = now()
             returning *
             """,

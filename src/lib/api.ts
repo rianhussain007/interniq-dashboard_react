@@ -8,7 +8,7 @@ export type Internship = {
   mode?: string;
   stipend: string;
   skills?: string[];
-  apply_link: string;
+  apply_link: string | null;
   source: 'LinkedIn' | 'Internshala' | 'Naukri' | string;
   posted_date?: string | null;
   deadline?: string | null;

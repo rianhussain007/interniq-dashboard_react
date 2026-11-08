@@ -83,15 +83,21 @@ export default function Applications() {
                   </span>
                 </div>
                 <div className="col-span-2 text-right">
-                  <a
-                    href={application.internship.apply_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
-                    aria-label={`Open ${application.internship.title} posting`}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
+                  {application.internship.apply_link ? (
+                    <a
+                      href={application.internship.apply_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+                      aria-label={`Open ${application.internship.title} posting`}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  ) : (
+                    <span title="Posting link unavailable" className="inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-lg border border-gray-200 text-gray-400 dark:border-gray-700">
+                      <ExternalLink className="h-4 w-4" />
+                    </span>
+                  )}
                 </div>
               </article>
             ))}
