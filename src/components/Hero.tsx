@@ -16,6 +16,7 @@ import {
 import { cn } from '../lib/utils';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { DashboardWorkspace } from './DashboardWorkspace';
 
 type StatCard = {
   label: string;
@@ -360,6 +361,8 @@ export const Hero = () => {
             </div>
           </div>
         </motion.div>
+
+        <DashboardWorkspace />
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">

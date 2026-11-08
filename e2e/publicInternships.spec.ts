@@ -92,6 +92,18 @@ test('local email accounts can register, restore, sign in, and persist a career 
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('button', { name: 'Jordan Demo Student' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pick up where you left off' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Alert settings/ })).toBeVisible();
+
+  await page.getByRole('link', { name: /Alert settings/ }).click();
+  await expect(page).toHaveURL(/\/settings\/alerts$/);
+  await expect(page.getByRole('heading', { name: 'Alert settings' })).toBeVisible();
+  await page.getByRole('radio', { name: /Every 15 minutes while open/ }).check();
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved');
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('button', { name: 'Jordan Demo Student' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Jordan Demo Student' })).toBeVisible();
 

@@ -17,6 +17,9 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - Career tools: a resume builder with account-synced drafts and PDF content checklist, three resume layouts, role-based interview practice, personalized outreach drafts, and an internship compensation calculator.
 - Explainable resume tailoring: compare a resume with a posting to see covered and missing skills, term coverage, and suggestions. Coverage is a checklist ratio, never an ATS score.
 - Communities, events, and in-app notifications: join a community, post, RSVP to events, and receive notifications for new posts in communities you belong to.
+- Dashboard workspace: one-click grouped paths to internships, saved roles, applications, profile setup, every career tool, and alert settings.
+- Alert settings: choose which in-app alerts arrive (new matches, application deadlines, community posts) and how often InternIQ checks while the app is open; each posting and deadline alerts once.
+- Optional alert email: students who opt in get one summary email for new matches and deadlines, with a signed unsubscribe link. Transient provider errors retry with backoff and permanent failures go to a local dead-letter file. Delivery is off until `RESEND_API_KEY` and `INTERNIQ_EMAIL_FROM` are set; `INTERNIQ_EMAIL_TRANSPORT="log"` writes messages to a local file for development and does not send email. Community alerts remain in-app.
 - InternIQ Guide: a bottom-corner app-guide bot that routes students to the right tool (it is guidance, not career advice; the Mentor route handles that).
 
 The six career tools work without an account or model-provider calls: the resume PDF checklist runs in the browser, and practice/outreach content is not sent to InternIQ. A signed-in account additionally syncs resume drafts across devices and enables the server-side job-description comparison, which sends that resume text to the backend. The compensation calculator uses only figures entered by the student; it does not claim to provide market-rate benchmarks. Saved listings, applications, profiles, checklist progress, communities, events, notifications, and personalized role matching need a local account.
@@ -74,6 +77,16 @@ INTERNIQ_SQLITE_PATH="backend/data/interniq.sqlite3"
 ```
 
 The frontend only reads `VITE_*` variables. Backend secrets must not be exposed through `VITE_*` variables. The SQLite file is created on first use and excluded from Git.
+
+Alert email is optional and disabled by default. To enable inbox delivery, create a Resend API key and a verified sender, then set `RESEND_API_KEY` and `INTERNIQ_EMAIL_FROM` (plus `INTERNIQ_APP_URL` so links point at the deployed frontend). Once email is configured, the API runs a background scheduler for opted-in students every five minutes by default (`INTERNIQ_ALERT_SCHEDULER_INTERVAL_SECONDS`), so match and deadline email does not wait for an open browser; set `INTERNIQ_ALERT_SCHEDULER="off"` to disable it. Without a provider, the alert-settings email toggle is disabled and alerts remain in-app only. To inspect messages locally without sending anything, set `INTERNIQ_EMAIL_TRANSPORT="log"` and optionally `INTERNIQ_EMAIL_LOG` to choose the output file. The default local outbox can contain account email addresses and alert text; it is git-ignored.
+
+Each email includes a signed one-click unsubscribe link that works without signing in: `GET` shows a confirmation button and `POST` (also sent by mail clients via `List-Unsubscribe-Post`) turns email alerts off for that account. Links are signed with `INTERNIQ_UNSUBSCRIBE_SECRET`, falling back to `INTERNIQ_ADMIN_TOKEN`; rotating it invalidates every link already delivered. Set `INTERNIQ_API_PUBLIC_URL` when the API is served from a different origin than the frontend, otherwise links derive the API origin from the app URL. The default outbox and dead-letter files can contain account email addresses and alert text; they are git-ignored.
+
+To inspect or retry failed provider messages, run `python replay_dead_letters.py --dry-run` from `backend/` first, then `python replay_dead_letters.py` after reviewing the listed recipients and subject lines. Replays use the same configured email provider and keep messages that still fail.
+
+Once the provider is healthy, `cd backend && python replay_dead_letters.py` resends everything in that file and removes the records it delivered; anything that still fails stays put, so nothing is lost twice. Before each send it re-checks the account, so a student who unsubscribed or deleted their account after the failure is skipped rather than emailed anyway. `--dry-run` lists what would be resent without contacting the provider, and the command exits non-zero while messages remain.
+
+Sends are retried up to three times with exponential backoff when the provider times out, rate-limits, or returns a 5xx; a rejection such as an unverified sender or bad recipient fails immediately, since retrying cannot fix it. A message that still fails is appended to `INTERNIQ_EMAIL_DEAD_LETTER` (default `backend/data/email_dead_letter.jsonl`, git-ignored) with its recipient, subject, text and error, so a provider outage never silently drops a notice. The student still sees the alert in-app either way.
 
 The refresh uses built-in public employer boards for Stripe, Datadog, Figma, Roblox, Duolingo, Coinbase, Scale AI, MongoDB, Affirm, Pinterest, Cloudflare, Palantir, Ramp, Perplexity, Sentry, and Notion. Each refresh reads currently published roles and keeps only internship/co-op postings. Customize or replace a provider list with comma-separated board slugs:
 
@@ -162,7 +175,7 @@ The app should be available at `http://localhost:5173` and call the backend thro
 Install the backend's development dependencies and run the deterministic backend suite from the project root:
 
 ```bash
-npm test
+npm run test
 npx playwright install chromium
 npm run test:e2e
 npm run typecheck
@@ -206,7 +219,11 @@ Current routes:
 - `POST /api/events`
 - `POST /api/events/rsvp`
 - `GET /api/notifications`
+- `GET /api/notifications/preferences`
+- `PUT /api/notifications/preferences`
 - `POST /api/notifications/read`
+- `GET /api/notifications/unsubscribe` (signed confirmation page)
+- `POST /api/notifications/unsubscribe` (signed one-click opt-out)
 
 Dashboard summary, checklist, saved internships, applications, profile, mentor chat, and personalized search require a valid bearer session. Local mode verifies the session against SQLite and scopes private records to that user; PostgreSQL/Supabase verification is an optional hosted configuration. SQLite role matching works without model keys. PostgreSQL mode can embed queries with `GEMINI_API_KEY` and rank internship vectors. Public keyword search is available without sign-in. Local listing refresh checks public feeds; hosted refresh and full reindex require the admin header.
 

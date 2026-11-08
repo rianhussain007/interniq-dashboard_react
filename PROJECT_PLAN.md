@@ -6,7 +6,7 @@ Assessment date: 2026-11-09. Percentages are scope estimates, not test scores or
 
 | Area | Estimate | Evidence | Remaining gap |
 | --- | ---: | --- | --- |
-| Local-first product scope | 85% | Local SQLite registration/sign-in, account-scoped profile/saved/applications/checklist, resume drafts, community/events, public live-feed adapters, role matching, resume tools, interview practice, networking drafts, offer comparison, branding tips, and GitHub profile lookup are implemented. The current workspace has 165 postings fetched from public employer boards; the demo account signs in and reaches the dashboard. | Source coverage and freshness are not guaranteed; some tools are intentionally browser-local, and a first-run database stays empty until a live refresh. Full visual review, OCR, password recovery, and production-grade account operations remain out of scope for this local prototype. |
+| Local-first product scope | 85% | Local SQLite registration/sign-in, account-scoped profile/saved/applications/checklist, resume drafts, community/events, public live-feed adapters, role matching, resume tools, interview practice, networking drafts, offer comparison, branding tips, GitHub profile lookup, dashboard workspace, alert preferences, and optional email delivery are implemented. The current workspace has 165 postings fetched from public employer boards; the demo account signs in and reaches the dashboard. | Source coverage and freshness are not guaranteed; some tools are intentionally browser-local, and a first-run database stays empty until a live refresh. Full visual review, OCR, password recovery, and production-grade account operations remain out of scope for this local prototype. |
 | Agentic / retrieval prototype | 70% | Chunking, embedding/index interfaces, PostgreSQL/pgvector retrieval, and structured mentor output are implemented. SQLite role matching works offline with explainable term/profile overlap. | No configured PostgreSQL, Gemini, or Groq credentials; a live scrape → embed → vector retrieve → grounded mentor journey has not been demonstrated in this workspace. |
 | Production readiness | 25% | Local CI commands and end-to-end checks cover the main auth and browsing journeys; deployment definitions exist for a future hosted environment. | No staging deployment, production secrets, monitoring/alerts, recovery exercise, accessibility review, or user acceptance results. |
 
@@ -31,6 +31,8 @@ These estimates track implemented scope separately from operating evidence. The 
 - [x] Add side-by-side offer arithmetic for contract pay and student-entered benefit value.
 - [x] Remove the dead placeholder component and obsolete CDN-worker resume analyzer.
 - [x] Verify the demo user can sign in through the app and load the authenticated dashboard.
+- [x] Add a dashboard workspace with direct grouped links to opportunity, profile, and career-prep workflows.
+- [x] Add account-scoped alert preferences, interval-aware in-app polling, and opt-in Resend/local-log email delivery with retries and signed one-click unsubscribe.
 - [x] Remove invented internship seeding; test fixtures are isolated to backend tests, and the product feed uses fetched public postings only.
 - [x] Check the main routes for resume tools, interview practice, networking, salary comparison, profile, saved items, applications, community/events, branding, and GitHub lookup.
 
@@ -40,7 +42,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 
 ### A. Full local and UI verification
 
-- [x] Local frontend lint, strict typecheck, production build, eleven frontend interaction tests, four Chromium end-to-end tests, and 37 backend tests pass in the current workspace.
+- [x] Local frontend lint, strict typecheck, production build, thirteen frontend interaction tests, four Chromium end-to-end tests, and 48 backend tests pass in the current workspace.
 - [x] Exercise public feed, local registration/session restore/sign-in/profile save, mobile layout, and guest access to the browser-local career tools in Chromium.
 - [x] Sign in to the local demo account and verify the authenticated dashboard renders.
 - [ ] Visually review every career-tool route, print output, invalid PDF cases, and responsive layouts beyond the internship feed.
@@ -86,7 +88,7 @@ Do not raise the rating on the basis of added code, a successful build, or mocke
 
 ## Time estimate and dependencies
 
-- Eleven frontend interaction tests, four Chromium end-to-end tests, 37 backend tests, strict frontend type-checking, and the production build pass locally. Live staging and production remain gated on external services and credentials.
+- Thirteen frontend interaction tests, four Chromium end-to-end tests, 48 backend tests, strict frontend type-checking, and the production build pass locally. Live staging and production remain gated on external services and credentials.
 - A first staging integration pass is estimated at **0.5–1.5 focused days after** valid database, model-provider, auth, and cloud access are available. Provider approval, database provisioning, or source-site changes can extend that calendar time.
 - Production launch time is not responsibly estimable until staging results, product acceptance, monitoring, and operating ownership are known.
 - At the last workspace audit, `.env`, provider credentials, a live PostgreSQL/pgvector instance, and cloud project access were unavailable. No TRL above the local prototype level is supported by evidence yet.

@@ -34,18 +34,38 @@ export const Navbar = () => {
       return;
     }
     let active = true;
-    const loadNotifications = () => {
-      void apiRequest<NotificationFeed>('/api/notifications')
-        .then((feed) => {
-          if (!active) return;
-          setNotifications(feed.items);
-          setUnreadCount(feed.unread_count);
-        })
-        .catch(() => undefined);
+    let timer: number | undefined;
+    const loadNotifications = async () => {
+      let nextPollMs = 60_000;
+      try {
+        const preferences = await apiRequest<{ frequency_minutes: number }>('/api/notifications/preferences');
+        nextPollMs = preferences.frequency_minutes === 0
+          ? 60_000
+          : Math.max(60_000, preferences.frequency_minutes * 60_000);
+      } catch {
+        // Keep the navbar usable if preferences cannot be loaded; retry in a minute.
+      }
+      try {
+        const feed = await apiRequest<NotificationFeed>('/api/notifications');
+        if (!active) return;
+        setNotifications(feed.items);
+        setUnreadCount(feed.unread_count);
+      } catch {
+        // Alerts are supplemental; a transient failure should not disrupt navigation.
+      }
+      if (active) timer = window.setTimeout(loadNotifications, nextPollMs);
     };
-    loadNotifications();
-    const timer = window.setInterval(loadNotifications, 60_000);
-    return () => { active = false; window.clearInterval(timer); };
+    const handleSettingsUpdated = () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      void loadNotifications();
+    };
+    void loadNotifications();
+    window.addEventListener('interniq:alerts-settings-updated', handleSettingsUpdated);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener('interniq:alerts-settings-updated', handleSettingsUpdated);
+    };
   }, [isAuthenticated]);
 
   const markNotificationsRead = () => {
@@ -153,7 +173,8 @@ export const Navbar = () => {
                 { name: 'GitHub Tracker', path: '/github-tracker' },
                 { name: 'Resume Analyzer', path: '/resume-analyzer' },
                 { name: 'Profile Setup', path: '/profile-setup' },
-                { name: 'Community & Events', path: '/community' }
+                { name: 'Community & Events', path: '/community' },
+                { name: 'Alert Settings', path: '/settings/alerts' }
               ]} 
             />
             <form role="search" onSubmit={handleSearch} className="relative">
@@ -220,6 +241,13 @@ export const Navbar = () => {
                         ))
                       )}
                     </div>
+                    <Link
+                      to="/settings/alerts"
+                      onClick={() => setIsNotifOpen(false)}
+                      className="block px-4 py-2.5 text-xs font-semibold text-indigo-600 hover:bg-gray-50 dark:text-indigo-300 dark:hover:bg-gray-700"
+                    >
+                      Alert settings →
+                    </Link>
                   </div>
                 )}
               </div>
@@ -373,7 +401,8 @@ export const Navbar = () => {
                   { name: 'Branding Tips', path: '/branding-tips' },
                   { name: 'GitHub Tracker', path: '/github-tracker' },
                   { name: 'Resume Analyzer', path: '/resume-analyzer' },
-                  { name: 'Profile Setup', path: '/profile-setup' }
+                  { name: 'Profile Setup', path: '/profile-setup' },
+                  { name: 'Alert Settings', path: '/settings/alerts' }
                 ]} 
                 isMobile 
               />

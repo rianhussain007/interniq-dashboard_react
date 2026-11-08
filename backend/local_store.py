@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
@@ -16,6 +17,9 @@ from pathlib import Path
 from typing import Any, Iterator
 from urllib.parse import urlsplit
 
+import emailer
+
+logger = logging.getLogger(__name__)
 
 BACKEND_DIR = Path(__file__).resolve().parent
 DEFAULT_DATABASE_PATH = BACKEND_DIR / "data" / "interniq.sqlite3"
@@ -142,6 +146,15 @@ CREATE TABLE IF NOT EXISTS notification_state (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     generated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notification_preferences (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    match_alerts INTEGER NOT NULL DEFAULT 1,
+    deadline_alerts INTEGER NOT NULL DEFAULT 1,
+    community_alerts INTEGER NOT NULL DEFAULT 1,
+    email_alerts INTEGER NOT NULL DEFAULT 0,
+    frequency_minutes INTEGER NOT NULL DEFAULT 60,
+    updated_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS community_posts_community_idx ON community_posts(community_id, created_at DESC);
 """
 
@@ -180,6 +193,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS notifications_dedupe_idx "
         "ON notifications(user_id, dedupe_key)"
     )
+    preference_columns = {row[1] for row in conn.execute("PRAGMA table_info(notification_preferences)").fetchall()}
+    if preference_columns and "email_alerts" not in preference_columns:
+        conn.execute("ALTER TABLE notification_preferences ADD COLUMN email_alerts INTEGER NOT NULL DEFAULT 0")
 
 
 def _hash_password(password: str, salt: bytes | None = None) -> str:
@@ -684,33 +700,99 @@ def save_resume_draft(user_id: str, draft: dict[str, Any]) -> dict[str, Any]:
         conn.execute("INSERT INTO resume_drafts(user_id,draft_json,updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET draft_json=excluded.draft_json, updated_at=excluded.updated_at", (user_id, json.dumps(draft, ensure_ascii=False), _now()))
     return get_resume_draft(user_id)
 
-def _notify(conn, user_id, kind, title, body="", link="", dedupe_key=None):
-    conn.execute(
+def _notify(conn, user_id, kind, title, body="", link="", dedupe_key=None) -> bool:
+    """Insert a notification, returning False when the dedupe key already exists."""
+    cursor = conn.execute(
         "INSERT OR IGNORE INTO notifications(id,user_id,kind,title,body,link,dedupe_key,created_at) VALUES (?,?,?,?,?,?,?,?)",
         (str(uuid.uuid4()), user_id, kind, title, body, link, dedupe_key, _now()),
     )
+    return cursor.rowcount > 0
 
 
 ALERT_COOLDOWN_MINUTES = 60
 ALERT_MATCH_WINDOW_DAYS = 7
 ALERT_DEADLINE_WINDOW_DAYS = 3
 ALERT_MAX_MATCHES = 3
+ALERT_FREQUENCY_CHOICES = (0, 15, 60, 240)
+
+DEFAULT_NOTIFICATION_PREFERENCES: dict[str, Any] = {
+    "match_alerts": True,
+    "deadline_alerts": True,
+    "community_alerts": True,
+    "email_alerts": False,
+    "frequency_minutes": ALERT_COOLDOWN_MINUTES,
+}
+
+
+def get_notification_preferences(user_id: str) -> dict[str, Any]:
+    with connection() as conn:
+        row = conn.execute("SELECT * FROM notification_preferences WHERE user_id=?", (user_id,)).fetchone()
+    if row is None:
+        return dict(DEFAULT_NOTIFICATION_PREFERENCES)
+    return {
+        "match_alerts": bool(row["match_alerts"]),
+        "deadline_alerts": bool(row["deadline_alerts"]),
+        "community_alerts": bool(row["community_alerts"]),
+        "email_alerts": bool(row["email_alerts"]),
+        "frequency_minutes": int(row["frequency_minutes"]),
+    }
+
+
+def save_notification_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
+    current = get_notification_preferences(user_id)
+    merged = {**current, **{key: value for key, value in preferences.items() if value is not None}}
+    try:
+        frequency = int(merged["frequency_minutes"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Notification frequency must be a number of minutes.") from exc
+    if frequency not in ALERT_FREQUENCY_CHOICES:
+        raise ValueError(
+            "Notification frequency must be one of: "
+            + ", ".join(str(choice) for choice in ALERT_FREQUENCY_CHOICES)
+            + " minutes."
+        )
+    with connection() as conn:
+        conn.execute(
+            """INSERT INTO notification_preferences(
+                   user_id, match_alerts, deadline_alerts, community_alerts, email_alerts,
+                   frequency_minutes, updated_at
+               ) VALUES (?,?,?,?,?,?,?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                   match_alerts=excluded.match_alerts,
+                   deadline_alerts=excluded.deadline_alerts,
+                   community_alerts=excluded.community_alerts,
+                   email_alerts=excluded.email_alerts,
+                   frequency_minutes=excluded.frequency_minutes,
+                   updated_at=excluded.updated_at""",
+            (
+                user_id,
+                int(bool(merged["match_alerts"])),
+                int(bool(merged["deadline_alerts"])),
+                int(bool(merged["community_alerts"])),
+                int(bool(merged["email_alerts"])),
+                frequency,
+                _now(),
+            ),
+        )
+    return get_notification_preferences(user_id)
 
 
 def generate_user_alerts(user_id: str, force: bool = False) -> int:
-    """Create match and deadline notifications for one student.
+    """Create the alert kinds a student has enabled, at their chosen frequency.
 
-    Runs at most once per cooldown window so a polling client cannot rebuild the
-    same alerts. Dedupe keys make repeated runs idempotent as well.
+    Dedupe keys make repeated runs idempotent; the frequency setting bounds how
+    often polling can rebuild alerts.
     """
     now = datetime.now(timezone.utc)
+    preferences = get_notification_preferences(user_id)
+    cooldown_minutes = int(preferences["frequency_minutes"])
     with connection() as conn:
-        if not force:
+        if not force and cooldown_minutes > 0:
             state = conn.execute("SELECT generated_at FROM notification_state WHERE user_id=?", (user_id,)).fetchone()
             if state:
                 try:
                     generated_at = datetime.fromisoformat(str(state["generated_at"]).replace("Z", "+00:00"))
-                    if (now - generated_at) < timedelta(minutes=ALERT_COOLDOWN_MINUTES):
+                    if (now - generated_at) < timedelta(minutes=cooldown_minutes):
                         return 0
                 except ValueError:
                     pass
@@ -719,34 +801,44 @@ def generate_user_alerts(user_id: str, force: bool = False) -> int:
         skills = [str(skill).strip() for skill in (profile.get("skills") or []) if str(skill).strip()]
         target_role = str(profile.get("target_role") or "")
         created = 0
+        outbox: list[dict[str, str]] = []
 
         # Deadline alerts for applications the student is still waiting on.
-        deadline_rows = conn.execute(
-            """SELECT i.id, i.title, i.company, i.deadline
-               FROM applications a JOIN internships i ON i.id = a.internship_id
-               WHERE a.user_id = ? AND a.status IN ('applied', 'interviewing')
-                 AND i.deadline IS NOT NULL AND date(i.deadline) >= date('now')
-                 AND date(i.deadline) <= date('now', ?)""",
-            (user_id, f"+{ALERT_DEADLINE_WINDOW_DAYS} days"),
-        ).fetchall()
+        if not preferences["deadline_alerts"]:
+            deadline_rows = []
+        else:
+            deadline_rows = conn.execute(
+                """SELECT i.id, i.title, i.company, i.deadline
+                   FROM applications a JOIN internships i ON i.id = a.internship_id
+                   WHERE a.user_id = ? AND a.status IN ('applied', 'interviewing')
+                     AND i.deadline IS NOT NULL AND date(i.deadline) >= date('now')
+                     AND date(i.deadline) <= date('now', ?)""",
+                (user_id, f"+{ALERT_DEADLINE_WINDOW_DAYS} days"),
+            ).fetchall()
         for row in deadline_rows:
             try:
                 days_left = (date.fromisoformat(str(row["deadline"])[:10]) - now.date()).days
             except ValueError:
                 continue
             when = "today" if days_left == 0 else "tomorrow" if days_left == 1 else f"in {days_left} days"
-            _notify(
+            deadline_alert = {
+                "title": f"Deadline {when}: {row['title']}",
+                "body": f"{row['company']} · your application is tracked. Check the posting before it closes.",
+                "link": "/applications",
+            }
+            if _notify(
                 conn,
                 user_id,
                 "deadline",
-                f"Deadline {when}: {row['title']}",
-                f"{row['company']} · your application is tracked. Check the posting before it closes.",
-                "/applications",
+                deadline_alert["title"],
+                deadline_alert["body"],
+                deadline_alert["link"],
                 dedupe_key=f"deadline:{row['id']}:{row['deadline']}",
-            )
-            created += 1
+            ):
+                outbox.append(deadline_alert)
+                created += 1
 
-        if skills or target_role:
+        if preferences["match_alerts"] and (skills or target_role):
             rows = conn.execute(
                 """SELECT * FROM internships
                    WHERE (deadline IS NULL OR date(deadline) >= date('now'))
@@ -766,23 +858,92 @@ def generate_user_alerts(user_id: str, force: bool = False) -> int:
             ranked.sort(key=lambda entry: (entry[0], entry[1]), reverse=True)
             for overlap, _score, item, matched_skills in ranked[:ALERT_MAX_MATCHES]:
                 matched = ", ".join(matched_skills[:3])
-                _notify(
+                match_alert = {
+                    "title": f"New match: {item['title']}",
+                    "body": f"{item['company']} · matches {matched or 'your target role'}",
+                    "link": "/internships",
+                }
+                if _notify(
                     conn,
                     user_id,
                     "new_match",
-                    f"New match: {item['title']}",
-                    f"{item['company']} · matches {matched or 'your target role'}",
-                    "/internships",
+                    match_alert["title"],
+                    match_alert["body"],
+                    match_alert["link"],
                     dedupe_key=f"match:{item['id']}",
-                )
-                created += 1
+                ):
+                    outbox.append(match_alert)
+                    created += 1
 
         conn.execute(
             "INSERT INTO notification_state(user_id,generated_at) VALUES (?,?) "
             "ON CONFLICT(user_id) DO UPDATE SET generated_at=excluded.generated_at",
             (user_id, _now()),
         )
+
+    # Delivered after the transaction commits, so a send failure can never roll
+    # back the alerts the student will see in the app.
+    if outbox and preferences["email_alerts"]:
+        send_email_digest(user_id, outbox)
     return created
+
+
+def generate_alerts_for_all_users(limit: int = 1000) -> int:
+    """Run alert generation for every student who asked for email delivery.
+
+    This is what makes alerts arrive while the app is closed: the scheduler calls
+    it on an interval instead of waiting for a browser to poll.
+    """
+    with connection() as conn:
+        rows = conn.execute(
+            """SELECT p.user_id FROM notification_preferences p
+               JOIN users u ON u.id = p.user_id
+               WHERE p.email_alerts = 1
+               LIMIT ?""",
+            (max(1, limit),),
+        ).fetchall()
+    created = 0
+    for row in rows:
+        try:
+            created += generate_user_alerts(row[0])
+        except Exception:  # One broken account must not stop the rest of the batch.
+            logger.exception("Could not generate scheduled alerts for account %s", row[0])
+            continue
+    return created
+
+
+def send_email_digest(user_id: str, alerts: list[dict[str, str]]) -> bool:
+    """Email one summary of newly created alerts, when the student opted in."""
+    if not alerts or not emailer.is_configured():
+        return False
+    with connection() as conn:
+        user = conn.execute("SELECT email, name FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        return False
+    return emailer.send_alert_email(user["email"], user["name"], alerts, user_id)
+
+
+def email_alerts_status(email: str) -> bool | None:
+    """Whether alert email is on for an address, or None when no such account exists."""
+    with connection() as conn:
+        row = conn.execute(
+            """SELECT COALESCE(p.email_alerts, 0) AS enabled
+               FROM users u LEFT JOIN notification_preferences p ON p.user_id = u.id
+               WHERE u.email = ? COLLATE NOCASE""",
+            (email.strip(),),
+        ).fetchone()
+    if row is None:
+        return None
+    return bool(row["enabled"])
+
+
+def disable_email_alerts(user_id: str) -> bool:
+    """Turn off alert email for one account. Used by the no-sign-in unsubscribe link."""
+    with connection() as conn:
+        if not conn.execute("SELECT id FROM users WHERE id=?", (user_id,)).fetchone():
+            return False
+    save_notification_preferences(user_id, {"email_alerts": False})
+    return True
 
 # --- Communities / events / notifications ---
 def create_community(user_id: str, name: str, description: str = "") -> dict[str, Any]:
@@ -823,7 +984,15 @@ def create_post(user_id: str, community_id: str, body: str) -> dict[str, Any]:
         conn.execute("INSERT OR IGNORE INTO community_members(community_id,user_id,joined_at) VALUES (?,?,?)", (community_id, user_id, _now()))
         conn.execute("INSERT INTO community_posts(id,community_id,user_id,body,created_at) VALUES (?,?,?,?,?)", (pid, community_id, user_id, body[:2000], _now()))
         members = [r[0] for r in conn.execute("SELECT user_id FROM community_members WHERE community_id=? AND user_id != ?", (community_id, user_id)).fetchall()]
+        muted = {
+            r[0]
+            for r in conn.execute(
+                "SELECT user_id FROM notification_preferences WHERE community_alerts=0"
+            ).fetchall()
+        }
         for mid in members:
+            if mid in muted:
+                continue
             _notify(conn, mid, "community_post", "New community post", body[:120], f"/community?community={community_id}")
     return {"id": pid, "body": body, "community_id": community_id}
 

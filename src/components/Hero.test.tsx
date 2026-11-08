@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { Hero } from './Hero';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/api';
@@ -45,7 +46,7 @@ describe('Hero mentor assistant', () => {
 
   it('sends the signed-in student message and renders the structured, sourced response', async () => {
     const user = userEvent.setup();
-    render(<Hero />);
+    render(<MemoryRouter><Hero /></MemoryRouter>);
 
     const input = screen.getByPlaceholderText('Ask anything about your career...');
     await user.type(input, 'Which frontend roles fit my React experience?');

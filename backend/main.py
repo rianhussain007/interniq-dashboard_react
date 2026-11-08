@@ -1,16 +1,20 @@
 import json
+import logging
 import os
 import sys
 import subprocess
 import threading
 import time
+from contextlib import asynccontextmanager
 from typing import Any
+from urllib.parse import quote
 from typing import Literal
 from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 from psycopg import OperationalError
@@ -22,6 +26,7 @@ from pydantic import BaseModel, Field
 from auth import authenticated_user_id, bearer_scheme, is_local_auth_mode, require_admin_token, require_authenticated_user
 from db import get_db_connection, is_sqlite_backend
 from embeddings import GeminiEmbeddingClient
+import emailer
 import local_store
 from internships_store import (
     get_dashboard_summary,
@@ -41,9 +46,20 @@ from rag_store import reindex_rag
 from rag_store import retrieve_context
 from rag_store import search_internships_semantic
 
+logger = logging.getLogger(__name__)
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-app = FastAPI()
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    start_alert_scheduler()
+    try:
+        yield
+    finally:
+        stop_alert_scheduler()
+
+
+app = FastAPI(lifespan=_lifespan)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SCRAPER_SCRIPT = os.path.join(PROJECT_ROOT, "scraper", "update_internships.py")
@@ -650,6 +666,98 @@ def rsvp_route(payload: PostRequest, current_user: dict[str, Any] = Depends(requ
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+class NotificationPreferencesRequest(BaseModel):
+    match_alerts: bool | None = None
+    deadline_alerts: bool | None = None
+    community_alerts: bool | None = None
+    email_alerts: bool | None = None
+    frequency_minutes: int | None = Field(default=None, ge=0, le=1440)
+
+
+@app.get("/api/notifications/preferences")
+def get_notification_preferences_route(current_user: dict[str, Any] = Depends(require_authenticated_user)):
+    if not is_sqlite_backend():
+        raise HTTPException(status_code=501, detail="Notification settings are available in local mode.")
+    preferences = local_store.get_notification_preferences(authenticated_user_id(current_user))
+    return {
+        **preferences,
+        "email_available": emailer.is_configured(),
+        "email_transport": emailer.transport(),
+    }
+
+
+@app.put("/api/notifications/preferences")
+def save_notification_preferences_route(
+    payload: NotificationPreferencesRequest,
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    if not is_sqlite_backend():
+        raise HTTPException(status_code=501, detail="Notification settings are available in local mode.")
+    try:
+        saved = local_store.save_notification_preferences(
+            authenticated_user_id(current_user), payload.model_dump()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        **saved,
+        "email_available": emailer.is_configured(),
+        "email_transport": emailer.transport(),
+    }
+
+
+def _unsubscribe_page(title: str, message: str, form: str = "", status_code: int = 200) -> HTMLResponse:
+    content = (
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        f"<title>{title} · InternIQ</title></head>"
+        '<body style="font-family:system-ui,sans-serif;max-width:520px;margin:64px auto;padding:0 20px;color:#111827">'
+        f"<h1 style=\"font-size:22px\">{title}</h1><p>{message}</p>{form}</body></html>"
+    )
+    return HTMLResponse(content=content, status_code=status_code)
+
+
+def _valid_unsubscribe_request(u: str, t: str) -> bool:
+    return bool(u and t) and is_sqlite_backend() and emailer.verify_unsubscribe_token(u, t)
+
+
+@app.get("/api/notifications/unsubscribe")
+def unsubscribe_page_route(u: str = "", t: str = ""):
+    if not _valid_unsubscribe_request(u, t):
+        return _unsubscribe_page(
+            "That link has expired",
+            "This unsubscribe link is not valid. Open InternIQ and change your alert settings instead.",
+            status_code=400,
+        )
+    form = (
+        f'<form method="post" action="/api/notifications/unsubscribe?u={quote(u)}&amp;t={quote(t)}">'
+        '<button type="submit" style="background:#4f46e5;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600">'
+        "Turn off alert emails</button></form>"
+    )
+    return _unsubscribe_page("Turn off InternIQ alert emails?", "You will stop receiving internship match and deadline emails. In-app alerts stay on.", form)
+
+
+@app.post("/api/notifications/unsubscribe")
+def unsubscribe_route(u: str = "", t: str = ""):
+    if not _valid_unsubscribe_request(u, t):
+        return _unsubscribe_page(
+            "That link has expired",
+            "This unsubscribe link is not valid. Open InternIQ and change your alert settings instead.",
+            status_code=400,
+        )
+    removed = local_store.disable_email_alerts(u)
+    if not removed:
+        return _unsubscribe_page(
+            "Account not found",
+            "That account no longer exists, so there is nothing left to unsubscribe.",
+            status_code=404,
+        )
+    return _unsubscribe_page(
+        "Alert emails are off",
+        "You will no longer receive internship match or deadline emails. In-app alerts are unchanged, and you can turn email back on in Alert settings.",
+    )
+
+
 @app.get("/api/notifications")
 def list_notifications_route(current_user: dict[str, Any] = Depends(require_authenticated_user)):
     if not is_sqlite_backend():
@@ -907,3 +1015,64 @@ def list_applications_route(
             return list_applications(conn, user_id)
     except Exception as exc:
         raise db_http_error(exc) from exc
+
+
+ALERT_SCHEDULER_INTERVAL_SECONDS = max(
+    60, int(os.getenv("INTERNIQ_ALERT_SCHEDULER_INTERVAL_SECONDS", "300"))
+)
+_alert_scheduler_lock = threading.Lock()
+_alert_scheduler_stop: threading.Event | None = None
+_alert_scheduler_thread: threading.Thread | None = None
+
+
+def alert_scheduler_enabled() -> bool:
+    mode = os.getenv("INTERNIQ_ALERT_SCHEDULER", "auto").strip().lower()
+    if mode in {"off", "0", "false", "disabled"}:
+        return False
+    if mode in {"on", "1", "true", "enabled"}:
+        return True
+    # Auto: run whenever email delivery is configured, since that is the only
+    # reason alerts need to be generated without an open browser tab.
+    return is_sqlite_backend() and emailer.is_configured()
+
+
+def _run_alert_scheduler(stop: threading.Event) -> None:
+    while not stop.wait(ALERT_SCHEDULER_INTERVAL_SECONDS):
+        try:
+            local_store.generate_alerts_for_all_users()
+        except Exception:
+            # A scheduled run must never take the API process down.
+            logger.exception("Scheduled InternIQ alert generation failed")
+            continue
+
+
+def start_alert_scheduler() -> None:
+    global _alert_scheduler_stop, _alert_scheduler_thread
+    if not alert_scheduler_enabled():
+        return
+    with _alert_scheduler_lock:
+        if _alert_scheduler_thread and _alert_scheduler_thread.is_alive():
+            return
+        _alert_scheduler_stop = threading.Event()
+        _alert_scheduler_thread = threading.Thread(
+            target=_run_alert_scheduler,
+            args=(_alert_scheduler_stop,),
+            name="interniq-alert-scheduler",
+            daemon=True,
+        )
+        _alert_scheduler_thread.start()
+
+
+def stop_alert_scheduler() -> None:
+    global _alert_scheduler_stop, _alert_scheduler_thread
+    with _alert_scheduler_lock:
+        stop = _alert_scheduler_stop
+        thread = _alert_scheduler_thread
+        if stop is not None:
+            stop.set()
+    if thread is not None and thread is not threading.current_thread():
+        thread.join(timeout=2)
+    with _alert_scheduler_lock:
+        if _alert_scheduler_thread is thread and (thread is None or not thread.is_alive()):
+            _alert_scheduler_thread = None
+            _alert_scheduler_stop = None

@@ -2,12 +2,18 @@
 
 The production app must never fill its feed with invented internship listings.
 """
+import json
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
+
+import httpx
 
 from fastapi.testclient import TestClient
 
+import emailer
 import local_store
 import main
+import replay_dead_letters
 
 
 def _client(monkeypatch, tmp_path):
@@ -285,7 +291,321 @@ def test_community_endpoints_require_authentication(monkeypatch, tmp_path):
     with _client(monkeypatch, tmp_path) as client:
         assert client.get("/api/communities").status_code == 401
         assert client.get("/api/notifications").status_code == 401
+        assert client.get("/api/notifications/preferences").status_code == 401
         assert client.get("/api/resume/draft").status_code == 401
+
+
+def test_notification_preferences_default_save_and_validate(monkeypatch, tmp_path):
+    for variable in ("RESEND_API_KEY", "INTERNIQ_EMAIL_FROM", "INTERNIQ_EMAIL_TRANSPORT"):
+        monkeypatch.delenv(variable, raising=False)
+    with _client(monkeypatch, tmp_path) as client:
+        headers, _ = _auth_headers(client)
+
+        defaults = client.get("/api/notifications/preferences", headers=headers).json()
+        assert defaults == {
+            "match_alerts": True,
+            "deadline_alerts": True,
+            "community_alerts": True,
+            "email_alerts": False,
+            "frequency_minutes": 60,
+            "email_available": False,
+            "email_transport": "disabled",
+        }
+
+        updated = client.put("/api/notifications/preferences", headers=headers, json={
+            "match_alerts": False,
+            "frequency_minutes": 240,
+        })
+        assert updated.status_code == 200
+        assert updated.json()["match_alerts"] is False
+        assert updated.json()["frequency_minutes"] == 240
+        # Omitted fields keep their stored value instead of resetting to defaults.
+        assert updated.json()["deadline_alerts"] is True
+
+        assert client.get("/api/notifications/preferences", headers=headers).json()["match_alerts"] is False
+        assert client.put("/api/notifications/preferences", headers=headers, json={
+            "frequency_minutes": 7,
+        }).status_code == 422
+
+
+def test_alert_email_summarizes_new_alerts_when_opted_in(monkeypatch, tmp_path):
+    outbox = tmp_path / "email_outbox.jsonl"
+    monkeypatch.setenv("INTERNIQ_UNSUBSCRIBE_SECRET", "alerts-test-secret")
+    monkeypatch.setenv("INTERNIQ_EMAIL_TRANSPORT", "log")
+    monkeypatch.setenv("INTERNIQ_EMAIL_LOG", str(outbox))
+    monkeypatch.setenv("INTERNIQ_ALERT_SCHEDULER", "off")
+    with _client(monkeypatch, tmp_path) as client:
+        _insert_test_postings()
+        headers, _ = _auth_headers(client)
+        client.put("/api/profile", headers=headers, json={
+            "name": "Jordan Lee",
+            "target_role": "data science intern",
+            "location": "Bengaluru",
+            "education": "BSc Computer Science",
+            "graduation_year": "2027",
+            "interests": ["machine learning"],
+            "skills": ["Python", "SQL"],
+        })
+        enabled = client.put("/api/notifications/preferences", headers=headers, json={"email_alerts": True})
+        assert enabled.json()["email_available"] is True
+
+        feed = client.get("/api/notifications", headers=headers).json()
+        # A second poll must not send a second email for the same alerts.
+        client.get("/api/notifications", headers=headers).json()
+
+    messages = [json.loads(line) for line in outbox.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(messages) == 1, messages
+    assert messages[0]["to"] == "student@example.test"
+    assert "Data Science Intern" in messages[0]["text"]
+    assert "/applications" not in messages[0]["text"]
+    assert "Turn off these emails" in messages[0]["text"]
+    assert "/api/notifications/unsubscribe?u=" in messages[0]["unsubscribe_url"]
+    assert len(feed["items"]) > 0
+
+
+def test_unsubscribe_link_turns_off_email_without_signing_in(monkeypatch, tmp_path):
+    monkeypatch.setenv("INTERNIQ_UNSUBSCRIBE_SECRET", "alerts-test-secret")
+    with _client(monkeypatch, tmp_path) as client:
+        headers, user_id = _auth_headers(client)
+        client.put("/api/notifications/preferences", headers=headers, json={"email_alerts": True})
+        path = f"/api/notifications/unsubscribe?u={quote(user_id)}&t={emailer.unsubscribe_token(user_id)}"
+
+        # GET only asks for confirmation, so a link prefetch cannot unsubscribe anyone.
+        page = client.get(path)
+        assert page.status_code == 200
+        assert "Turn off alert emails" in page.text
+        assert client.get("/api/notifications/preferences", headers=headers).json()["email_alerts"] is True
+
+        confirmed = client.post(path)
+        assert confirmed.status_code == 200
+        assert "Alert emails are off" in confirmed.text
+        assert client.get("/api/notifications/preferences", headers=headers).json()["email_alerts"] is False
+
+
+def test_unsubscribe_rejects_a_forged_token(monkeypatch, tmp_path):
+    monkeypatch.setenv("INTERNIQ_UNSUBSCRIBE_SECRET", "alerts-test-secret")
+    with _client(monkeypatch, tmp_path) as client:
+        headers, user_id = _auth_headers(client)
+        client.put("/api/notifications/preferences", headers=headers, json={"email_alerts": True})
+
+        forged = client.post(f"/api/notifications/unsubscribe?u={quote(user_id)}&t=not-a-real-token")
+        assert forged.status_code == 400
+        assert "not valid" in forged.text
+        # A token signed for a different account must not work either.
+        other_token = emailer.unsubscribe_token("some-other-user")
+        cross = client.post(f"/api/notifications/unsubscribe?u={quote(user_id)}&t={quote(other_token)}")
+        assert "not valid" in cross.text
+        assert client.get("/api/notifications/preferences", headers=headers).json()["email_alerts"] is True
+
+
+def test_alert_email_is_not_sent_without_opt_in(monkeypatch, tmp_path):
+    outbox = tmp_path / "email_outbox.jsonl"
+    monkeypatch.setenv("INTERNIQ_EMAIL_TRANSPORT", "log")
+    monkeypatch.setenv("INTERNIQ_EMAIL_LOG", str(outbox))
+    monkeypatch.setenv("INTERNIQ_ALERT_SCHEDULER", "off")
+    with _client(monkeypatch, tmp_path) as client:
+        _insert_test_postings()
+        headers, _ = _auth_headers(client)
+        client.put("/api/profile", headers=headers, json={
+            "name": "Jordan Lee",
+            "target_role": "data science intern",
+            "location": "Bengaluru",
+            "education": "BSc Computer Science",
+            "graduation_year": "2027",
+            "interests": ["machine learning"],
+            "skills": ["Python", "SQL"],
+        })
+        feed = client.get("/api/notifications", headers=headers).json()
+
+    assert feed["items"], "in-app alerts should still be created"
+    assert not outbox.exists(), "no email should be sent unless the student opts in"
+
+
+def test_alert_email_is_skipped_when_delivery_is_unconfigured(monkeypatch, tmp_path):
+    outbox = tmp_path / "email_outbox.jsonl"
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("INTERNIQ_EMAIL_FROM", raising=False)
+    monkeypatch.delenv("INTERNIQ_EMAIL_TRANSPORT", raising=False)
+    monkeypatch.setenv("INTERNIQ_EMAIL_LOG", str(outbox))
+    with _client(monkeypatch, tmp_path) as client:
+        _insert_test_postings()
+        headers, _ = _auth_headers(client)
+        client.put("/api/profile", headers=headers, json={
+            "name": "Jordan Lee",
+            "target_role": "data science intern",
+            "location": "Bengaluru",
+            "education": "BSc Computer Science",
+            "graduation_year": "2027",
+            "interests": ["machine learning"],
+            "skills": ["Python", "SQL"],
+        })
+        settings = client.put("/api/notifications/preferences", headers=headers, json={"email_alerts": True}).json()
+        assert settings["email_available"] is False
+        feed = client.get("/api/notifications", headers=headers).json()
+
+    assert feed["items"]
+    assert not outbox.exists()
+
+
+def test_unwritable_local_email_outbox_does_not_break_alert_flow(monkeypatch, tmp_path):
+    blocker = tmp_path / "file-not-directory"
+    blocker.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv("INTERNIQ_EMAIL_TRANSPORT", "log")
+    monkeypatch.setenv("INTERNIQ_EMAIL_LOG", str(blocker / "outbox.jsonl"))
+
+    delivered = main.emailer.send_alert_email(
+        "student@example.test",
+        "Jordan Lee",
+        [{"title": "New match", "body": "Frontend role", "link": "/internships"}],
+    )
+
+    assert delivered is False
+
+
+def test_scheduled_generation_only_covers_students_who_asked_for_email(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        _insert_test_postings()
+        subscribed_headers, subscribed_id = _auth_headers(client, "subscribed@example.test")
+        quiet_headers, quiet_id = _auth_headers(client, "quiet@example.test")
+        for headers in (subscribed_headers, quiet_headers):
+            client.put("/api/profile", headers=headers, json={
+                "name": "Jordan Lee",
+                "target_role": "data science intern",
+                "location": "Bengaluru",
+                "education": "BSc Computer Science",
+                "graduation_year": "2027",
+                "interests": ["machine learning"],
+                "skills": ["Python", "SQL"],
+            })
+        client.put("/api/notifications/preferences", headers=subscribed_headers, json={
+            "email_alerts": True,
+            "frequency_minutes": 0,
+        })
+        client.put("/api/notifications/preferences", headers=quiet_headers, json={
+            "email_alerts": False,
+            "frequency_minutes": 0,
+        })
+
+        assert local_store.generate_alerts_for_all_users() >= 1
+
+    subscribed = [item for item in local_store.list_notifications(subscribed_id) if item["kind"] == "new_match"]
+    assert subscribed, "an opted-in student should get alerts without opening the app"
+    assert local_store.list_notifications(quiet_id) == []
+
+
+def test_replay_skips_students_who_opted_out_or_no_longer_exist(monkeypatch, tmp_path):
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("INTERNIQ_EMAIL_FROM", "InternIQ <alerts@example.test>")
+    monkeypatch.delenv("INTERNIQ_EMAIL_TRANSPORT", raising=False)
+    monkeypatch.setenv("INTERNIQ_ALERT_SCHEDULER", "off")
+    dead_letter = tmp_path / "dead_letter.jsonl"
+    with _client(monkeypatch, tmp_path) as client:
+        opted_headers, _ = _auth_headers(client, "opted@example.test")
+        _auth_headers(client, "gone@example.test")
+        # The opt-out can land after the message failed, which is exactly the
+        # window a replay must respect.
+        client.put("/api/notifications/preferences", headers=opted_headers, json={"email_alerts": True})
+        records = [
+            {"to": "opted@example.test", "subject": "New match: Data Intern", "text": "Open InternIQ"},
+            {"to": "gone@example.test", "subject": "New match: Data Intern", "text": "Open InternIQ"},
+            {"to": "deleted@example.test", "subject": "New match: Data Intern", "text": "Open InternIQ"},
+        ]
+        dead_letter.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+
+        sent: list[dict] = []
+        monkeypatch.setattr(
+            emailer.httpx,
+            "post",
+            lambda _url, **kwargs: (
+                sent.append(kwargs["json"]),
+                httpx.Response(200, request=httpx.Request("POST", "https://api.resend.com/emails"), json={"id": "ok"}),
+            )[1],
+        )
+
+        assert replay_dead_letters.replay(dead_letter) == (1, 0, 2, 0)
+
+    assert [message["to"] for message in sent] == [["opted@example.test"]]
+    assert not dead_letter.exists()
+
+
+def test_disabling_match_alerts_stops_new_match_notifications(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        _insert_test_postings()
+        headers, _ = _auth_headers(client)
+        client.put("/api/notifications/preferences", headers=headers, json={"match_alerts": False})
+        client.put("/api/profile", headers=headers, json={
+            "name": "Jordan Lee",
+            "target_role": "data science intern",
+            "location": "Bengaluru",
+            "education": "BSc Computer Science",
+            "graduation_year": "2027",
+            "interests": ["machine learning"],
+            "skills": ["Python", "SQL"],
+        })
+
+        notifications = client.get("/api/notifications", headers=headers).json()
+
+    assert [item for item in notifications["items"] if item["kind"] == "new_match"] == []
+
+
+def test_disabling_community_alerts_stops_post_notifications(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        author_headers, _ = _auth_headers(client, "author@example.test")
+        member_headers, _ = _auth_headers(client, "member@example.test")
+        community_id = client.post("/api/communities", headers=author_headers, json={
+            "name": "Resume Review Circle",
+            "description": "Swap resume feedback.",
+        }).json()["id"]
+        client.post("/api/communities/join", headers=member_headers, json={"community_id": community_id})
+        client.put("/api/notifications/preferences", headers=member_headers, json={"community_alerts": False})
+
+        client.post("/api/posts", headers=author_headers, json={
+            "community_id": community_id,
+            "body": "Sharing my STAR-format bullet template.",
+        })
+
+        notifications = client.get("/api/notifications", headers=member_headers).json()
+
+    assert [item for item in notifications["items"] if item["kind"] == "community_post"] == []
+
+
+def test_fast_frequency_picks_up_new_postings_without_waiting_an_hour(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        headers, user_id = _auth_headers(client)
+        client.put("/api/profile", headers=headers, json={
+            "name": "Jordan Lee",
+            "target_role": "software engineering intern",
+            "location": "Remote",
+            "education": "BSc Computer Science",
+            "graduation_year": "2027",
+            "interests": ["web"],
+            "skills": ["React", "TypeScript"],
+        })
+        local_store.upsert_internship({
+            "title": "Frontend Intern",
+            "company": "First Co",
+            "source": "Greenhouse",
+            "apply_link": "https://jobs.example.test/first",
+            "skills": ["React", "TypeScript"],
+        })
+        assert client.get("/api/notifications", headers=headers).json()["items"]
+
+        local_store.upsert_internship({
+            "title": "UI Engineer Intern",
+            "company": "Second Co",
+            "source": "Lever",
+            "apply_link": "https://jobs.example.test/second",
+            "skills": ["React", "TypeScript"],
+        })
+
+        # Hourly polling would swallow this posting until the cooldown expires.
+        swallowed = client.get("/api/notifications", headers=headers).json()
+        assert all("Second Co" not in item["body"] for item in swallowed["items"])
+
+        client.put("/api/notifications/preferences", headers=headers, json={"frequency_minutes": 0})
+        refreshed = client.get("/api/notifications", headers=headers).json()
+
+    assert any("Second Co" in item["body"] for item in refreshed["items"]), user_id
 
 
 def test_internship_detail_returns_posting_or_404(monkeypatch, tmp_path):

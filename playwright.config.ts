@@ -29,7 +29,9 @@ export default defineConfig({
       command: `${python} -m uvicorn main:app --host 127.0.0.1 --port 8001`,
       cwd: 'backend',
       url: 'http://127.0.0.1:8001/api/health',
-      reuseExistingServer: !process.env.CI,
+      // This suite binds dedicated ports and supplies its own CORS/database
+      // environment. Reusing a stale process can silently run with the wrong env.
+      reuseExistingServer: false,
       timeout: 60_000,
       env: {
         INTERNIQ_STORAGE_BACKEND: 'sqlite',
@@ -41,7 +43,7 @@ export default defineConfig({
     {
       command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
       url: 'http://127.0.0.1:4173',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 30_000,
       env: {
         VITE_API_BASE_URL: 'http://127.0.0.1:8001',

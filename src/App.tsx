@@ -20,6 +20,7 @@ const InterviewPrepPage = lazy(() => import('./pages/InterviewPrepPage'));
 const NetworkingPage = lazy(() => import('./pages/NetworkingPage'));
 const SalaryGuidePage = lazy(() => import('./pages/SalaryGuidePage'));
 const CommunityPage = lazy(() => import('./pages/CommunityPage'));
+const AlertSettingsPage = lazy(() => import('./pages/AlertSettingsPage'));
 
 // ProtectedRoute component to guard authenticated routes
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -120,6 +121,7 @@ const AppRoutes = () => (
     <Route path="/networking" element={<NetworkingPage />} />
     <Route path="/salary-guide" element={<SalaryGuidePage />} />
     <Route path="/community" element={<ProtectedRoute><CommunityPage /></ProtectedRoute>} />
+    <Route path="/settings/alerts" element={<ProtectedRoute><AlertSettingsPage /></ProtectedRoute>} />
 
     {/* Fallback route */}
     <Route path="*" element={<Navigate to="/" replace />} />

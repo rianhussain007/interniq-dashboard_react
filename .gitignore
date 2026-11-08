@@ -7,6 +7,8 @@ dist/
 backend/data/*.sqlite3
 backend/data/*.sqlite3-shm
 backend/data/*.sqlite3-wal
+backend/data/email_outbox.jsonl
+backend/data/email_dead_letter.jsonl
 .venv/
 .vitest/
 __pycache__/
