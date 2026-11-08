@@ -66,6 +66,7 @@ export const GithubTracker = () => {
           <div className="flex min-w-0 gap-2">
             <input
               type="text"
+              aria-label="GitHub username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter a GitHub username..."

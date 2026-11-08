@@ -85,7 +85,7 @@ const CommunityPage = () => {
         </section>
         <section className={toolCardClass}>
           <h2 className="font-bold">Posts {activeId ? '' : '(pick a community)'}</h2>
-          <textarea className={`${inputClass} mt-3`} rows={3} value={postBody} onChange={(e) => setPostBody(e.target.value)} placeholder="Ask a question or share an update…" />
+          <textarea aria-label="Write a community post" className={`${inputClass} mt-3`} rows={3} value={postBody} onChange={(e) => setPostBody(e.target.value)} placeholder="Ask a question or share an update…" />
           <button type="button" disabled={!activeId} onClick={() => void createPost()} className="mt-2 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Post</button>
           <div className="mt-4 space-y-3">
             {posts.map((p) => <article key={p.id} className="rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800"><p className="font-semibold">{p.author}</p><p className="mt-1">{p.body}</p><p className="mt-1 text-xs text-slate-500">{new Date(p.created_at).toLocaleString()}</p></article>)}

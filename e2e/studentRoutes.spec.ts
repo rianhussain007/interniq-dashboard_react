@@ -35,6 +35,7 @@ const sampleInternship = {
 test('student routes render at desktop and mobile sizes without horizontal overflow', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const pageErrors: string[] = [];
+  const routeAccessibilityIssues: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   const email = `route-review-${Date.now()}@example.test`;
@@ -56,6 +57,49 @@ test('student routes render at desktop and mobile sizes without horizontal overf
     await page.goto(route.path, { waitUntil: 'domcontentloaded' });
     const heading = page.getByRole('heading', { name: route.heading, exact: true }).first();
     await expect(heading).toBeVisible();
+
+    const accessibilityIssues = await page.evaluate(() => {
+      const visible = (element: Element) => {
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden'
+          && element.getClientRects().length > 0 && !element.closest('[aria-hidden="true"]');
+      };
+      const accessibleName = (element: Element) => {
+        const labelledBy = element.getAttribute('aria-labelledby')?.split(/\s+/)
+          .map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+        const labels = 'labels' in element
+          ? Array.from((element as HTMLInputElement).labels ?? []).map((label) => label.textContent ?? '').join(' ')
+          : '';
+        const imageText = Array.from(element.querySelectorAll('img[alt]')).map((image) => image.getAttribute('alt') ?? '').join(' ');
+        const controlValue = element instanceof HTMLInputElement ? element.value : '';
+        return [element.getAttribute('aria-label'), labelledBy, labels, element.textContent, imageText, element.getAttribute('title'), controlValue]
+          .find((value) => value?.trim())?.trim() ?? '';
+      };
+      const unlabeledControls = Array.from(document.querySelectorAll('button, a[href], input:not([type="hidden"]), textarea, select, [role="button"]'))
+        .filter(visible)
+        .filter((element) => !accessibleName(element))
+        .map((element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`);
+      const imagesWithoutAlt = Array.from(document.querySelectorAll('img'))
+        .filter(visible)
+        .filter((image) => !image.hasAttribute('alt'))
+        .map((image) => image.getAttribute('src') ?? 'image');
+      const visibleHeadings = Array.from(document.querySelectorAll('h1')).filter(visible).length;
+      const mainLandmarks = Array.from(document.querySelectorAll('main')).filter(visible).length;
+      return { unlabeledControls, imagesWithoutAlt, visibleHeadings, mainLandmarks };
+    });
+    if (accessibilityIssues.unlabeledControls.length) {
+      routeAccessibilityIssues.push(`${route.path}: unnamed controls: ${accessibilityIssues.unlabeledControls.join(', ')}`);
+    }
+    if (accessibilityIssues.imagesWithoutAlt.length) {
+      routeAccessibilityIssues.push(`${route.path}: images missing alt: ${accessibilityIssues.imagesWithoutAlt.join(', ')}`);
+    }
+    if (accessibilityIssues.visibleHeadings !== 1) {
+      routeAccessibilityIssues.push(`${route.path}: ${accessibilityIssues.visibleHeadings} visible h1 headings`);
+    }
+    if (accessibilityIssues.mainLandmarks !== 1) {
+      routeAccessibilityIssues.push(`${route.path}: ${accessibilityIssues.mainLandmarks} main landmarks`);
+    }
+
     if (route.path === '/internships') {
       // Let the debounced feed request finish so the visual review covers a
       // populated internship card rather than its loading placeholder.
@@ -112,5 +156,6 @@ test('student routes render at desktop and mobile sizes without horizontal overf
     }
   }
 
+  expect(routeAccessibilityIssues, 'student routes should have labeled controls and valid page landmarks').toEqual([]);
   expect(pageErrors, 'student routes should not throw browser errors').toEqual([]);
 });

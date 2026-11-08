@@ -546,7 +546,7 @@ export const InternshipFeed = () => {
           </aside>
 
           {/* Internship Listings */}
-          <main className="md:w-3/4">
+          <section className="md:w-3/4" aria-label="Internship listings">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-white px-4 py-3 shadow-sm dark:border-indigo-900/60 dark:bg-gray-800">
               <div>
                 <p className="text-sm font-semibold text-gray-900 dark:text-white">Live career-board listings</p>
@@ -654,7 +654,7 @@ export const InternshipFeed = () => {
                 </button>
               </div>
             )}
-          </main>
+          </section>
         </div>
       </div>
     </div>

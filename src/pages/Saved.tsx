@@ -47,7 +47,7 @@ export default function Saved() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-950 dark:bg-gray-900 dark:text-white sm:px-6 lg:px-8">
+    <section aria-label="Saved internships" className="min-h-screen bg-gray-50 px-4 py-8 text-gray-950 dark:bg-gray-900 dark:text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8 flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-200">
@@ -123,6 +123,6 @@ export default function Saved() {
           </div>
         )}
       </div>
-    </main>
+    </section>
   );
 }

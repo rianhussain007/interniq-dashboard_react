@@ -543,6 +543,7 @@ export const Hero = () => {
             <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
               <div className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-800 dark:bg-zinc-950/60">
                 <input
+                  aria-label="Ask the AI Mentor a career question"
                   value={mentorInput}
                   onChange={(event) => setMentorInput(event.target.value)}
                   onKeyDown={(event) => {
