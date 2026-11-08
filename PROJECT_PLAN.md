@@ -39,7 +39,7 @@ These estimates track implemented scope separately from operating evidence. The 
 - [x] Remove invented internship seeding; test fixtures are isolated to backend tests, and the product feed uses fetched public postings only.
 - [x] Show source-by-source counts and states after a live refresh so students can tell which boards returned roles and which had no matches.
 - [x] Check the main routes for resume tools, interview practice, networking, salary comparison, profile, saved items, applications, community/events, branding, and GitHub lookup.
-- [x] Review screenshots for all 16 student routes at desktop and mobile sizes; the automated sweep reports no horizontal overflow or uncaught browser errors. A route-level accessibility smoke check confirms named controls, alt attributes, one visible page heading, and one main landmark.
+- [x] Review screenshots for all 16 student routes at desktop and mobile sizes; the automated sweep reports no horizontal overflow or uncaught browser errors. Route checks confirm named controls, alt attributes, one visible page heading, and one main landmark; Axe scans WCAG 2.0, 2.1, and 2.2 A/AA rules at each route after entrance animations settle. Automated checks supplement, but do not replace, a full manual accessibility review.
 - [x] Verify the A4 resume print output is one page for a sample draft, excludes editor controls, and can be read by the browser-local scanner. Exercise unsupported file type, oversized PDF, and malformed-PDF error paths.
 
 The browser-side resume, interview, networking, and compensation tools make no AI or market-data claims. Resume drafts are stored in the browser and synced to SQLite for signed-in users; the scanner reads PDF text locally. The calculator formats user-entered figures and excludes tax, exchange rates, and external wage benchmarks.
@@ -58,7 +58,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 - [x] Add automated frontend coverage for the mentor interaction flow, including the structured response and source rendering.
 - [x] Remove unmounted legacy pages/layouts that duplicated current routes or exposed stale links; document the remaining manual external-API probes.
 
-**Exit evidence:** local lint/type/build, 19 frontend interaction tests, 63 backend tests, six Chromium journeys, a 16-route responsive/accessibility smoke sweep, a source-refresh walkthrough, and a print-to-scan browser walkthrough pass. This establishes a repeatable local prototype walkthrough; staged provider-backed retrieval and full accessibility review/product acceptance remain separate gates.
+**Exit evidence:** local lint/type/build, 19 frontend interaction tests, 63 backend tests, six Chromium journeys, a 16-route responsive/Axe accessibility sweep, a source-refresh walkthrough, and a print-to-scan browser walkthrough pass. This establishes a repeatable local prototype walkthrough; staged provider-backed retrieval, full manual accessibility review, and product acceptance remain separate gates.
 
 ### B. Staging integration
 

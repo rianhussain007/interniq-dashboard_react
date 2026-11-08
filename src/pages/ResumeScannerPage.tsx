@@ -190,7 +190,7 @@ const ResumeScannerPage = () => {
           <button type="button" onClick={() => fileInput.current?.click()} disabled={isScanning} className="flex min-h-32 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 px-5 text-center transition hover:border-indigo-500 hover:bg-indigo-50 disabled:opacity-60 dark:border-indigo-900 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/60">
             {isScanning ? <LoaderCircle className="mb-2 h-6 w-6 animate-spin text-indigo-600" aria-hidden="true" /> : <Upload className="mb-2 h-6 w-6 text-indigo-600" aria-hidden="true" />}
             <span className="font-semibold">{isScanning ? 'Reading resume locally…' : 'Choose a resume PDF'}</span>
-            <span className="mt-1 text-xs text-slate-500">Checklist runs in this browser</span>
+            <span className="mt-1 text-xs text-slate-600 dark:text-slate-300">Checklist runs in this browser</span>
           </button>
           {review && jobDescription.trim().length >= 40 && user?.id && (
             <button type="button" onClick={() => void runTailor(review.extractedText, jobDescription)} disabled={isTailoring} className="mt-3 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">

@@ -73,7 +73,7 @@ const InternshipCard = ({
     <div className="flex-grow">
       <div className="flex justify-between items-start">
         <h3 className="text-xl font-bold text-gray-900 dark:text-white">{internship.title}</h3>
-        <span className={`px-3 py-1 text-xs font-bold rounded-full text-white ${internship.source === 'LinkedIn' ? 'bg-blue-600' : 'bg-teal-500'}`}>
+        <span className={`px-3 py-1 text-xs font-bold rounded-full text-white ${internship.source === 'LinkedIn' ? 'bg-blue-600' : 'bg-teal-700'}`}>
           {internship.source}
         </span>
       </div>

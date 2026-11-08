@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const routeChecks = [
   { path: '/', heading: 'Pick up where you left off', screenshot: 'dashboard' },
@@ -98,6 +99,22 @@ test('student routes render at desktop and mobile sizes without horizontal overf
     }
     if (accessibilityIssues.mainLandmarks !== 1) {
       routeAccessibilityIssues.push(`${route.path}: ${accessibilityIssues.mainLandmarks} main landmarks`);
+    }
+    // Let route entrance transitions settle before checking contrast: Axe
+    // evaluates the temporarily composited colors while animated opacity is < 1.
+    await page.waitForTimeout(650);
+    const axeResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'])
+      .analyze();
+    for (const violation of axeResults.violations) {
+      const affectedNodes = violation.nodes.slice(0, 4).map((node) => {
+        const target = node.target.join(' ');
+        const summary = node.failureSummary?.replace(/\s+/g, ' ').slice(0, 160) ?? '';
+        return `${target}${summary ? `: ${summary}` : ''}`;
+      });
+      routeAccessibilityIssues.push(
+        `${route.path}: ${violation.impact ?? 'unknown'} ${violation.id} (${violation.nodes.length} node(s)) ${affectedNodes.join(' | ')}`,
+      );
     }
 
     if (route.path === '/internships') {
