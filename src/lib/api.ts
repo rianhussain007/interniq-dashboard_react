@@ -52,19 +52,30 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
   return response.json() as Promise<T>;
 }
 
-export function internshipSearchPath(params: {
+export type InternshipSearchParams = {
   q?: string;
   location?: string;
   source?: string;
   limit?: number;
   offset?: number;
-}) {
+};
+
+function internshipSearchQuery(params: InternshipSearchParams) {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set('q', params.q);
   if (params.location) searchParams.set('location', params.location);
   if (params.source && params.source !== 'All') searchParams.set('source', params.source);
   if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
   if (params.offset !== undefined) searchParams.set('offset', String(params.offset));
-  const query = searchParams.toString();
+  return searchParams.toString();
+}
+
+export function internshipSearchPath(params: InternshipSearchParams) {
+  const query = internshipSearchQuery(params);
   return query ? `/api/internships/search?${query}` : '/api/internships';
+}
+
+export function semanticInternshipSearchPath(params: InternshipSearchParams) {
+  const query = internshipSearchQuery(params);
+  return `/api/internships/semantic-search${query ? `?${query}` : ''}`;
 }

@@ -8,6 +8,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - React, TypeScript, Vite, and Tailwind dashboard.
 - FastAPI backend with CORS and environment-based configuration.
 - Search and filtering for internships.
+- Optional authenticated semantic search ranked by the existing pgvector internship index.
 - On-demand internship update endpoint.
 - Retrieval-augmented mentor using LangChain, Gemini embeddings, PostgreSQL/pgvector, and schema-validated Groq output.
 - Scrape-to-search indexing: normalize postings, split them into overlapping chunks, embed only changed chunks, and update pgvector in the same database transaction.
@@ -152,6 +153,7 @@ Current routes:
 - `GET /api/health`
 - `GET /api/internships`
 - `GET /api/internships/search`
+- `GET /api/internships/semantic-search`
 - `GET /api/dashboard/summary`
 - `GET /api/checklist`
 - `PUT /api/checklist`
@@ -163,7 +165,7 @@ Current routes:
 - `POST /api/mentor-chat`
 - `POST /api/rag/reindex`
 
-Dashboard summary, checklist, saved internships, applications, and mentor chat require a valid Supabase bearer token. The backend verifies the token with Supabase and binds private records to that verified user ID. Checklist progress is stored per account in PostgreSQL and syncs across devices. Scraping and full reindex require the admin header.
+Dashboard summary, checklist, saved internships, applications, mentor chat, and semantic internship search require a valid Supabase bearer token. The backend verifies the token with Supabase and binds private records to that verified user ID. Checklist progress is stored per account in PostgreSQL and syncs across devices. Semantic search embeds the query with `GEMINI_API_KEY` and ranks the existing internship vectors; keyword search remains available without sign-in. Scraping and full reindex require the admin header.
 
 ## RAG Assistant
 

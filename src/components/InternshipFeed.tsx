@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bookmark, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
-import { apiRequest, internshipSearchPath, type ApplicationRecord, type Internship } from '../lib/api';
+import { apiRequest, internshipSearchPath, semanticInternshipSearchPath, type ApplicationRecord, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
 const PAGE_SIZE = 24;
@@ -101,6 +101,7 @@ export const InternshipFeed = () => {
   const { user } = useAuth();
   const [allInternships, setAllInternships] = useState<Internship[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchMode, setSearchMode] = useState<'keyword' | 'semantic'>('keyword');
   const [location, setLocation] = useState('');
   const [source, setSource] = useState('All');
   const [loading, setLoading] = useState(true);
@@ -127,13 +128,17 @@ export const InternshipFeed = () => {
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const data = await apiRequest<Internship[]>(internshipSearchPath({
+        const searchParams = {
           q: searchTerm.trim() || undefined,
           location: location.trim() || undefined,
           source,
           limit: PAGE_SIZE,
           offset: 0,
-        }), { signal: controller.signal });
+        };
+        const searchPath = searchMode === 'semantic'
+          ? semanticInternshipSearchPath(searchParams)
+          : internshipSearchPath(searchParams);
+        const data = await apiRequest<Internship[]>(searchPath, { signal: controller.signal });
         if (!controller.signal.aborted) {
           setAllInternships(data);
           setOffset(data.length);
@@ -155,7 +160,7 @@ export const InternshipFeed = () => {
       controller.abort();
       paginationController.current?.abort();
     };
-  }, [searchTerm, location, source, retryCount]);
+  }, [searchTerm, searchMode, location, source, retryCount]);
 
   const loadMore = async () => {
     if (!hasMore || loadingMore) return;
@@ -166,13 +171,17 @@ export const InternshipFeed = () => {
     setPaginationError(null);
 
     try {
-      const data = await apiRequest<Internship[]>(internshipSearchPath({
+      const searchParams = {
         q: searchTerm.trim() || undefined,
         location: location.trim() || undefined,
         source,
         limit: PAGE_SIZE,
         offset,
-      }), { signal: controller.signal });
+      };
+      const searchPath = searchMode === 'semantic'
+        ? semanticInternshipSearchPath(searchParams)
+        : internshipSearchPath(searchParams);
+      const data = await apiRequest<Internship[]>(searchPath, { signal: controller.signal });
       if (controller.signal.aborted) return;
 
       setAllInternships((current) => {
@@ -198,7 +207,10 @@ export const InternshipFeed = () => {
     setActionError(null);
     setPendingActions({});
 
-    if (!user?.id) return () => { active = false; };
+    if (!user?.id) {
+      setSearchMode('keyword');
+      return () => { active = false; };
+    }
 
     const userId = encodeURIComponent(user.id);
     void Promise.all([
@@ -297,18 +309,34 @@ export const InternshipFeed = () => {
               <h2 className="text-2xl font-bold mb-6">Filters</h2>
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Keyword Search</label>
+                  <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {searchMode === 'semantic' ? 'AI Semantic Search' : 'Keyword Search'}
+                  </label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                       type="text"
                       id="search"
-                      placeholder="Title, company..."
+                      placeholder={searchMode === 'semantic' ? 'Describe the role you want...' : 'Title, company...'}
                       value={searchTerm}
+                      disabled={searchMode === 'semantic'}
                       onChange={e => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-70"
                     />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setSearchMode((mode) => mode === 'semantic' ? 'keyword' : 'semantic')}
+                    disabled={!user?.id || (searchMode === 'keyword' && searchTerm.trim().length < 3)}
+                    title={!user?.id ? 'Sign in to use AI semantic search' : undefined}
+                    aria-pressed={searchMode === 'semantic'}
+                    className="mt-2 rounded-md px-2 py-1 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:text-gray-400 dark:text-indigo-300 dark:hover:bg-indigo-500/10 dark:disabled:text-gray-500"
+                  >
+                    {searchMode === 'semantic' ? 'AI matching on · Switch to keyword' : user?.id ? 'Try AI semantic search' : 'Sign in for AI semantic search'}
+                  </button>
+                  {searchMode === 'semantic' && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Matching by meaning; the text field is locked until you switch back.</p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Location</label>

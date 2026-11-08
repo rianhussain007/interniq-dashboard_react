@@ -214,6 +214,67 @@ def index_internships(conn: Connection, embedder: GeminiEmbeddingClient) -> int:
     return indexed
 
 
+def search_internships_semantic(
+    conn: Connection,
+    embedder: GeminiEmbeddingClient,
+    query: str,
+    location: str | None = None,
+    source: str | None = None,
+    limit: int = 24,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    query_vector = vector_literal(embedder.embed(query, task="query"))
+    filters = [
+        "kd.source_type = 'internship'",
+        "kd.user_id is null",
+        "kd.embedding_model = %s",
+        "internship.last_seen_at >= now() - interval '30 days'",
+        "(internship.deadline is null or internship.deadline >= current_date)",
+    ]
+    params: list[Any] = [embedding_model()]
+
+    if location:
+        filters.append("internship.location ilike %s")
+        params.append(f"%{location}%")
+    if source:
+        filters.append("internship.source = %s")
+        params.append(source)
+
+    params.extend([limit, offset])
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            with distances as (
+                select
+                    internship.*,
+                    kd.embedding <=> %s::vector as distance
+                from knowledge_documents as kd
+                join internships as internship
+                  on internship.id::text = kd.source_id
+                where {' and '.join(filters)}
+            ),
+            best_matches as (
+                select distinct on (id) *
+                from distances
+                order by id, distance
+            )
+            select *, 1 - distance as similarity
+            from best_matches
+            order by distance, coalesce(posted_date, created_at::date) desc, created_at desc
+            limit %s offset %s
+            """,
+            (query_vector, *params),
+        )
+        rows = cur.fetchall()
+
+    results = []
+    for row in rows:
+        internship = row_to_internship(row)
+        internship["similarity"] = float(row["similarity"])
+        results.append(internship)
+    return results
+
+
 def index_career_guidance(conn: Connection, embedder: GeminiEmbeddingClient) -> int:
     memory_path = os.path.join(os.path.dirname(__file__), "data", "mentor_memory.json")
     try:

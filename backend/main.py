@@ -33,6 +33,7 @@ from internships_store import (
 from rag_store import index_user_context
 from rag_store import reindex_rag
 from rag_store import retrieve_context
+from rag_store import search_internships_semantic
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -385,6 +386,35 @@ def search_internships_route(
             return search_internships(
                 conn,
                 query=q,
+                location=location,
+                source=source,
+                limit=limit,
+                offset=offset,
+            )
+    except Exception as exc:
+        raise db_http_error(exc) from exc
+
+
+@app.get("/api/internships/semantic-search")
+def semantic_search_internships_route(
+    q: str = Query(min_length=3, max_length=500),
+    location: str | None = Query(default=None, min_length=1, max_length=200),
+    source: str | None = Query(default=None, min_length=1, max_length=100),
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    _current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    query = q.strip()
+    if len(query) < 3:
+        raise HTTPException(status_code=422, detail="Enter at least three characters for AI search.")
+
+    try:
+        embedder = GeminiEmbeddingClient()
+        with get_db_connection() as conn:
+            return search_internships_semantic(
+                conn,
+                embedder,
+                query,
                 location=location,
                 source=source,
                 limit=limit,
