@@ -182,7 +182,11 @@ export const InternshipFeed = () => {
   const routeQuery = searchParams.get('q') ?? '';
   const [allInternships, setAllInternships] = useState<Internship[]>([]);
   const [searchTerm, setSearchTerm] = useState(routeQuery);
-  const [searchMode, setSearchMode] = useState<'keyword' | 'semantic'>('keyword');
+  const matchParam = searchParams.get('match');
+  const [searchMode, setSearchMode] = useState<'keyword' | 'semantic'>(
+    // Links from the profile hand-off open ranked matching directly.
+    () => (searchParams.get('match') === '1' && user?.id ? 'semantic' : 'keyword'),
+  );
   const [location, setLocation] = useState('');
   const [source, setSource] = useState('All');
   const [mode, setMode] = useState('All');
@@ -204,6 +208,10 @@ export const InternshipFeed = () => {
   useEffect(() => {
     setSearchTerm(routeQuery);
   }, [routeQuery]);
+
+  useEffect(() => {
+    if (matchParam === '1' && user?.id) setSearchMode('semantic');
+  }, [matchParam, user?.id]);
 
   const handleSearchTermChange = (value: string) => {
     setSearchTerm(value);

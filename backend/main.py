@@ -28,6 +28,7 @@ from db import get_db_connection, is_sqlite_backend
 from embeddings import GeminiEmbeddingClient
 import emailer
 import local_store
+import replay_dead_letters
 from internships_store import (
     get_dashboard_summary,
     get_user_checklist as load_user_checklist,
@@ -53,9 +54,11 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     start_alert_scheduler()
+    start_dead_letter_retry()
     try:
         yield
     finally:
+        stop_dead_letter_retry()
         stop_alert_scheduler()
 
 
@@ -1076,3 +1079,60 @@ def stop_alert_scheduler() -> None:
         if _alert_scheduler_thread is thread and (thread is None or not thread.is_alive()):
             _alert_scheduler_thread = None
             _alert_scheduler_stop = None
+
+
+DEAD_LETTER_RETRY_SECONDS = max(60, int(os.getenv("INTERNIQ_DEAD_LETTER_RETRY_SECONDS", "1800")))
+_dead_letter_lock = threading.Lock()
+_dead_letter_stop: threading.Event | None = None
+_dead_letter_thread: threading.Thread | None = None
+
+
+def dead_letter_retry_enabled() -> bool:
+    mode = os.getenv("INTERNIQ_DEAD_LETTER_RETRY", "auto").strip().lower()
+    if mode in {"off", "0", "false", "disabled"}:
+        return False
+    if mode in {"on", "1", "true", "enabled"}:
+        return True
+    # Only useful when email is actually sendable.
+    return is_sqlite_backend() and emailer.is_configured()
+
+
+def _run_dead_letter_retry(stop: threading.Event) -> None:
+    while not stop.wait(DEAD_LETTER_RETRY_SECONDS):
+        try:
+            replay_dead_letters.retry_if_needed()
+        except Exception:
+            logger.exception("Dead-letter retry pass failed")
+            continue
+
+
+def start_dead_letter_retry() -> None:
+    global _dead_letter_stop, _dead_letter_thread
+    if not dead_letter_retry_enabled():
+        return
+    with _dead_letter_lock:
+        if _dead_letter_thread and _dead_letter_thread.is_alive():
+            return
+        _dead_letter_stop = threading.Event()
+        _dead_letter_thread = threading.Thread(
+            target=_run_dead_letter_retry,
+            args=(_dead_letter_stop,),
+            name="interniq-dead-letter-retry",
+            daemon=True,
+        )
+        _dead_letter_thread.start()
+
+
+def stop_dead_letter_retry() -> None:
+    global _dead_letter_stop, _dead_letter_thread
+    with _dead_letter_lock:
+        stop = _dead_letter_stop
+        thread = _dead_letter_thread
+        if stop is not None:
+            stop.set()
+    if thread is not None and thread is not threading.current_thread():
+        thread.join(timeout=2)
+    with _dead_letter_lock:
+        if _dead_letter_thread is thread and (thread is None or not thread.is_alive()):
+            _dead_letter_thread = None
+            _dead_letter_stop = None

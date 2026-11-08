@@ -493,6 +493,21 @@ def test_scheduled_generation_only_covers_students_who_asked_for_email(monkeypat
     assert local_store.list_notifications(quiet_id) == []
 
 
+def test_dead_letter_retry_runs_only_when_email_can_be_sent(monkeypatch):
+    for variable in ("RESEND_API_KEY", "INTERNIQ_EMAIL_FROM", "INTERNIQ_EMAIL_TRANSPORT", "INTERNIQ_DEAD_LETTER_RETRY"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("INTERNIQ_STORAGE_BACKEND", "sqlite")
+    assert main.dead_letter_retry_enabled() is False
+
+    monkeypatch.setenv("INTERNIQ_EMAIL_TRANSPORT", "log")
+    assert main.dead_letter_retry_enabled() is True
+
+    monkeypatch.setenv("INTERNIQ_DEAD_LETTER_RETRY", "off")
+    assert main.dead_letter_retry_enabled() is False
+    monkeypatch.setenv("INTERNIQ_DEAD_LETTER_RETRY", "on")
+    assert main.dead_letter_retry_enabled() is True
+
+
 def test_replay_skips_students_who_opted_out_or_no_longer_exist(monkeypatch, tmp_path):
     monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
     monkeypatch.setenv("INTERNIQ_EMAIL_FROM", "InternIQ <alerts@example.test>")

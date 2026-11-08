@@ -98,7 +98,7 @@ const ResumeBuilderPage = () => {
 
   return (
     <CareerToolLayout eyebrow="Resume tools" title="Resume builder" description="Draft a focused, evidence-led resume and preview it as you go. Your draft stays in this browser; print or save to PDF when it is ready.">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-100">
+      <div className="resume-toolbar mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-100">
         <span><strong>{template.name} template</strong> · {template.description}</span>
         <span aria-live="polite">{savedAt ? `Saved in this browser at ${savedAt}` : 'Draft is only stored on this device'}{serverNote ? ` · ${serverNote}` : ''}</span>
       </div>
@@ -140,7 +140,27 @@ const ResumeBuilderPage = () => {
           </article>
         </section>
       </div>
-      <style>{'@media print { body * { visibility: hidden !important; } .resume-preview, .resume-preview * { visibility: visible !important; } .resume-preview { position: absolute !important; inset: 0 !important; width: 100% !important; border: 0 !important; box-shadow: none !important; color: #111827 !important; } .resume-toolbar { display: none !important; } .resume-editor { display: none !important; } }'}</style>
+      <style>{`@page { size: A4; margin: 14mm; }
+        @media print {
+          html, body, #root { height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
+          #root > div { min-height: 0 !important; }
+          #root > div > header, #root > div > .fixed { display: none !important; }
+          #root > div > main { margin: 0 !important; padding: 0 !important; }
+          #root > div > main > div { min-height: 0 !important; padding: 0 !important; }
+          #root > div > main > div > div { max-width: none !important; margin: 0 !important; }
+          #root > div > main > div > div > div:first-child,
+          #root > div > main > div > div > .resume-toolbar,
+          .resume-editor, .resume-preview .resume-toolbar { display: none !important; }
+          body * { visibility: hidden !important; }
+          .resume-preview, .resume-preview * { visibility: visible !important; }
+          .resume-preview {
+            position: absolute !important; inset: 0 !important; width: 100% !important;
+            max-width: none !important; min-height: 0 !important; margin: 0 !important;
+            padding: 0 !important; border: 0 !important; box-shadow: none !important;
+            color: #111827 !important; background: #fff !important;
+          }
+          .resume-preview article { max-width: none !important; min-height: 0 !important; margin: 0 !important; }
+        }`}</style>
     </CareerToolLayout>
   );
 };

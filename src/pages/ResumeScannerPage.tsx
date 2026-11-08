@@ -35,10 +35,10 @@ const maxFileSize = 5 * 1024 * 1024;
 const maxPages = 15;
 const skillsToFind = ['Python', 'Java', 'JavaScript', 'TypeScript', 'C++', 'C#', 'React', 'Angular', 'Vue.js', 'Node.js', 'SQL', 'PostgreSQL', 'MongoDB', 'AWS', 'Azure', 'Docker', 'Kubernetes', 'Git', 'Machine Learning', 'Data Analysis', 'Figma', 'Excel', 'Tableau', 'Communication', 'Research', 'Leadership', 'Agile'];
 const sectionChecks: Array<[string, RegExp]> = [
-  ['Education', /\b(education|academic background|coursework)\b/i],
-  ['Experience', /\b(experience|employment|internship|work history)\b/i],
-  ['Projects', /\b(projects|selected work|portfolio)\b/i],
-  ['Skills', /\b(skills|technical skills|tools)\b/i],
+  ['Education', /(education|academicbackground|coursework)/i],
+  ['Experience', /(experience|employment|internship|workhistory)/i],
+  ['Projects', /(projects|selectedwork|portfolio)/i],
+  ['Skills', /(skills|technicalskills|tools)/i],
 ];
 const stopWords = new Set('about after again against also among and any are because been before being between both but can could did does doing down each few for from further had has have having here how into its itself just more most other our out over own same should some such than that the their them then there these they this those through too under until very was were what when where which while who will with would your using used role internship intern experience required preferred learn team support'.split(' '));
 
@@ -79,7 +79,11 @@ const reviewPdf = async (file: File, jobDescription: string): Promise<ScanReview
   await pdf.destroy();
 
   const normalized = text.toLowerCase();
-  const sections = sectionChecks.filter(([, matcher]) => matcher.test(text)).map(([name]) => name);
+  // PDF extractors may split positioned glyph runs with spaces, including in
+  // short section headings and email addresses. Compact whitespace for those
+  // recognition checks while retaining the original text for keyword review.
+  const compactNormalized = normalized.replace(/\s+/g, '');
+  const sections = sectionChecks.filter(([, matcher]) => matcher.test(compactNormalized)).map(([name]) => name);
   const skills = skillsToFind.filter((skill) => hasWholeTerm(normalized, skill.toLowerCase()));
   const keywords = [...new Set(jobDescription.toLowerCase().match(/[a-z][a-z0-9+#.-]{2,}/g) ?? [])]
     .filter((word) => !stopWords.has(word))
@@ -88,7 +92,7 @@ const reviewPdf = async (file: File, jobDescription: string): Promise<ScanReview
   return {
     fileName: file.name,
     pageCount: pdf.numPages,
-    emailFound: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(text),
+    emailFound: /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(compactNormalized),
     phoneFound: /(?:\+?\d[\d ().-]{7,}\d)/.test(text),
     sections,
     skills,
@@ -164,7 +168,10 @@ const ResumeScannerPage = () => {
       if (result.extractedTextLength < 80) setError('This PDF has little or no selectable text. It may be a scanned image; this browser-only prototype does not run OCR.');
       void runTailor(result.extractedText, jobDescription);
     } catch (scanError) {
-      setError(scanError instanceof Error ? scanError.message : 'The PDF could not be read. Try exporting it again as a text-based PDF.');
+      const reason = scanError instanceof Error ? scanError.message : '';
+      setError(reason.startsWith('This prototype scans up to ')
+        ? reason
+        : 'The PDF could not be read. Try exporting it again as a text-based PDF.');
     } finally {
       setIsScanning(false);
     }

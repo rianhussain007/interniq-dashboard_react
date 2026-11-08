@@ -171,6 +171,64 @@ def test_replay_skips_records_the_student_opted_out_of(monkeypatch, tmp_path):
     assert not path.exists(), "an obsolete message must not be retried forever"
 
 
+def test_background_retry_does_nothing_when_the_queue_is_empty(monkeypatch, tmp_path):
+    _configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("INTERNIQ_EMAIL_DEAD_LETTER", str(tmp_path / "missing.jsonl"))
+    calls = []
+    monkeypatch.setattr(emailer.httpx, "post", lambda *_a, **_k: calls.append(1))
+
+    assert replay_dead_letters.retry_if_needed() == (0, 0, 0, 0)
+    assert calls == []
+
+
+def test_background_retry_stops_after_one_provider_failure(monkeypatch, tmp_path):
+    _configure(monkeypatch, tmp_path, attempts="1")
+    path = _dead_letter_file(tmp_path, count=3)
+    monkeypatch.setenv("INTERNIQ_EMAIL_DEAD_LETTER", str(path))
+    monkeypatch.setattr(replay_dead_letters, "should_deliver", lambda _record: True)
+    calls = []
+
+    def failing_post(*_args, **_kwargs):
+        calls.append(1)
+        raise _http_error(503)
+
+    monkeypatch.setattr(emailer.httpx, "post", failing_post)
+
+    assert replay_dead_letters.retry_if_needed() == (0, 1, 0, 3)
+    assert len(calls) == 1, "a dead provider must not be asked once per queued message"
+    assert len(replay_dead_letters.load_records(path)) == 3
+
+
+def test_background_retry_clears_the_queue_once_the_provider_recovers(monkeypatch, tmp_path):
+    _configure(monkeypatch, tmp_path, attempts="1")
+    path = _dead_letter_file(tmp_path, count=3)
+    monkeypatch.setenv("INTERNIQ_EMAIL_DEAD_LETTER", str(path))
+    monkeypatch.setattr(replay_dead_letters, "should_deliver", lambda _record: True)
+    healthy = {"value": False}
+
+    def toggling_post(*_args, **_kwargs):
+        if not healthy["value"]:
+            raise _http_error(503)
+        return httpx.Response(200, request=httpx.Request("POST", "https://api.resend.com/emails"), json={"id": "ok"})
+
+    monkeypatch.setattr(emailer.httpx, "post", toggling_post)
+
+    assert replay_dead_letters.retry_if_needed() == (0, 1, 0, 3)
+    healthy["value"] = True
+    assert replay_dead_letters.retry_if_needed() == (3, 0, 0, 0)
+    assert not path.exists()
+
+
+def test_background_retry_leaves_the_queue_alone_without_credentials(monkeypatch, tmp_path):
+    for variable in ("RESEND_API_KEY", "INTERNIQ_EMAIL_FROM", "INTERNIQ_EMAIL_TRANSPORT"):
+        monkeypatch.delenv(variable, raising=False)
+    path = _dead_letter_file(tmp_path, count=2)
+    monkeypatch.setenv("INTERNIQ_EMAIL_DEAD_LETTER", str(path))
+
+    assert replay_dead_letters.retry_if_needed() == (0, 0, 0, 2)
+    assert len(replay_dead_letters.load_records(path)) == 2
+
+
 def test_replay_dry_run_sends_nothing(monkeypatch, tmp_path, capsys):
     _configure(monkeypatch, tmp_path)
     path = _dead_letter_file(tmp_path, count=2)

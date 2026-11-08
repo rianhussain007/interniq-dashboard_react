@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -21,6 +22,8 @@ from typing import Any
 from db import is_sqlite_backend
 import emailer
 import local_store
+
+logger = logging.getLogger(__name__)
 
 
 def dead_letter_path() -> Path:
@@ -57,8 +60,18 @@ def load_records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def replay(path: Path, *, dry_run: bool = False) -> tuple[int, int, int, int]:
-    """Return (delivered, failed, skipped, remaining) after attempting every record."""
+def replay(
+    path: Path,
+    *,
+    dry_run: bool = False,
+    stop_on_failure: bool = False,
+) -> tuple[int, int, int, int]:
+    """Return (delivered, failed, skipped, remaining) after attempting every record.
+
+    ``stop_on_failure`` is used by the background retry job: once the provider
+    rejects a send there is no point waiting through backoff for every other
+    record in the queue.
+    """
     records = load_records(path)
     if not records:
         return 0, 0, 0, 0
@@ -73,7 +86,7 @@ def replay(path: Path, *, dry_run: bool = False) -> tuple[int, int, int, int]:
     failed = 0
     skipped = 0
     remaining: list[dict[str, Any]] = []
-    for record in records:
+    for index, record in enumerate(records):
         if not should_deliver(record):
             # Opted out or deleted account: drop the message instead of retrying forever.
             skipped += 1
@@ -91,6 +104,10 @@ def replay(path: Path, *, dry_run: bool = False) -> tuple[int, int, int, int]:
         else:
             failed += 1
             remaining.append(record)
+            if stop_on_failure:
+                # Keep everything not yet attempted for the next cycle.
+                remaining.extend(records[index + 1 :])
+                break
 
     if remaining:
         path.write_text(
@@ -100,6 +117,28 @@ def replay(path: Path, *, dry_run: bool = False) -> tuple[int, int, int, int]:
     elif path.exists():
         path.unlink()
     return delivered, failed, skipped, len(remaining)
+
+
+def retry_if_needed() -> tuple[int, int, int, int]:
+    """One background retry pass: only touches the file when it has work to do."""
+    path = dead_letter_path()
+    records = load_records(path)
+    if not records:
+        return 0, 0, 0, 0
+    if emailer.transport() == "disabled":
+        return 0, 0, 0, len(records)
+    result = replay(path, stop_on_failure=True)
+    delivered, failed, skipped, remaining = result
+    if delivered:
+        logger.info(
+            "Dead-letter retry delivered %s message(s); %s skipped, %s remaining.",
+            delivered,
+            skipped,
+            remaining,
+        )
+    elif failed:
+        logger.warning("Dead-letter retry failed with %s message(s) still queued.", remaining)
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

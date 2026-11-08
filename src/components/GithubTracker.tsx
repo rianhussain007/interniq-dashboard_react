@@ -63,18 +63,18 @@ export const GithubTracker = () => {
         </header>
 
         <div className="max-w-2xl mx-auto">
-          <div className="flex gap-2">
+          <div className="flex min-w-0 gap-2">
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter a GitHub username..."
-              className="flex-grow px-4 py-2 rounded-lg bg-white dark:bg-gray-800 border focus:ring-2 focus:ring-indigo-500"
+              className="min-w-0 flex-1 rounded-lg border bg-white px-4 py-2 focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800"
             />
             <button
               onClick={fetchGithubData}
               disabled={loading}
-              className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400"
+              className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700 disabled:bg-indigo-400 sm:px-6"
             >
               {loading ? 'Analyzing...' : 'Analyze'}
             </button>

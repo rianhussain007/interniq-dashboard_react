@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Check, Loader2, Save } from 'lucide-react';
+import { ArrowRight, BellRing, Check, Loader2, Save } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { apiRequest } from '../lib/api';
 import { CareerToolLayout, inputClass, labelClass, toolCardClass } from '../components/CareerToolLayout';
 import { useAuth } from '../contexts/AuthContext';
@@ -101,6 +102,30 @@ export default function ProfileSetupPage() {
             </button>
             {saved && <p role="status" className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300"><Check className="h-4 w-4" aria-hidden="true" /> Profile saved</p>}
           </div>
+          {saved && (
+            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+              <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100">
+                Your matches just got sharper
+              </p>
+              <p className="mt-1 text-sm text-emerald-800/90 dark:text-emerald-100/80">
+                Ranked search now weighs these skills, and new roles that overlap them can alert you.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  to={`/internships${profile.target_role.trim() ? `?q=${encodeURIComponent(profile.target_role.trim())}&match=1` : ''}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                >
+                  See matching internships <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+                <Link
+                  to="/settings/alerts"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white/80 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-white dark:border-emerald-400/30 dark:bg-transparent dark:text-emerald-100"
+                >
+                  <BellRing className="h-4 w-4" aria-hidden="true" /> Turn on alerts
+                </Link>
+              </div>
+            </div>
+          )}
         </>}
       </form>
     </CareerToolLayout>

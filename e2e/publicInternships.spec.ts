@@ -27,7 +27,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('guest home opens public internships and preserves the return path when signing in', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'commit' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   await expect(page).toHaveURL(/\/internships$/);
   await expect(page.getByRole('heading', { name: 'Find Your Next Internship' })).toBeVisible();

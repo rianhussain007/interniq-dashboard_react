@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Moon, Sun, Menu, X, User as UserIcon, LogOut, Bell } from 'lucide-react';
@@ -25,6 +25,7 @@ export const Navbar = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -67,6 +68,22 @@ export const Navbar = () => {
       window.removeEventListener('interniq:alerts-settings-updated', handleSettingsUpdated);
     };
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isNotifOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) setIsNotifOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsNotifOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isNotifOpen]);
 
   const markNotificationsRead = () => {
     setUnreadCount(0);
@@ -201,7 +218,7 @@ export const Navbar = () => {
           {/* Right Section: User & Theme Toggle */}
           <div className="hidden lg:flex items-center space-x-4">
             {isAuthenticated && (
-              <div className="relative">
+              <div className="relative" ref={notifRef}>
                 <button
                   type="button"
                   onClick={() => setIsNotifOpen(!isNotifOpen)}

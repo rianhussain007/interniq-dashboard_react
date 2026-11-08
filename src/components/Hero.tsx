@@ -17,6 +17,7 @@ import { cn } from '../lib/utils';
 import { apiRequest } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { DashboardWorkspace } from './DashboardWorkspace';
+import { ProfileOnboarding } from './ProfileOnboarding';
 
 type StatCard = {
   label: string;
@@ -361,6 +362,8 @@ export const Hero = () => {
             </div>
           </div>
         </motion.div>
+
+        <ProfileOnboarding />
 
         <DashboardWorkspace />
 

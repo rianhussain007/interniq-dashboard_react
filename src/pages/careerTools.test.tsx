@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import * as pdfjsLib from 'pdfjs-dist';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -55,6 +56,28 @@ describe('InternIQ career tools', () => {
 
     expect(await screen.findByRole('status')).toBeTruthy();
     expect(screen.getByRole('status').textContent).toContain('Choose a PDF file');
+  });
+
+  it('rejects oversized PDFs before attempting to parse them', async () => {
+    render(<AuthProvider><MemoryRouter><ResumeScannerPage /></MemoryRouter></AuthProvider>);
+    const file = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'resume.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('Choose resume PDF'), { target: { files: [file] } });
+
+    expect(await screen.findByRole('status')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('smaller than 5 MB');
+  });
+
+  it('explains when a PDF cannot be parsed', async () => {
+    vi.mocked(pdfjsLib.getDocument).mockImplementationOnce(() => ({
+      promise: Promise.reject(new Error('Invalid PDF structure')),
+      destroy: vi.fn(),
+    }) as unknown as ReturnType<typeof pdfjsLib.getDocument>);
+    render(<AuthProvider><MemoryRouter><ResumeScannerPage /></MemoryRouter></AuthProvider>);
+    const file = new File(['%PDF-1.7 broken'], 'broken.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('Choose resume PDF'), { target: { files: [file] } });
+
+    expect(await screen.findByRole('status')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('The PDF could not be read');
   });
 
   it('guides a role-specific interview practice session', async () => {
