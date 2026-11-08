@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Moon, Sun, Menu, X, User as UserIcon, LogOut } from 'lucide-react';
 import logo from '../../assets/favicon_interniq.png';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,12 +14,24 @@ export const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [searchParams] = useSearchParams();
+  const routeQuery = searchParams.get('q') ?? '';
+  const [searchQuery, setSearchQuery] = useState(routeQuery);
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
   const handleLogout = () => {
     logout();
+    setIsMenuOpen(false);
     navigate('/login');
+  };
+
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+    setIsMenuOpen(false);
+    navigate(`/internships?q=${encodeURIComponent(query)}`);
   };
 
   // Effect to handle scroll and dark mode
@@ -39,6 +51,10 @@ export const Navbar = () => {
 
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    setSearchQuery(routeQuery);
+  }, [routeQuery]);
 
   // Toggle dark mode
   const toggleTheme = () => {
@@ -105,14 +121,25 @@ export const Navbar = () => {
                 { name: 'Profile Setup', path: '/profile-setup' }
               ]} 
             />
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <form role="search" onSubmit={handleSearch} className="relative">
+              <label htmlFor="desktop-internship-search" className="sr-only">Search internships</label>
+              <button
+                type="submit"
+                disabled={!searchQuery.trim()}
+                aria-label="Search internships"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 disabled:cursor-not-allowed"
+              >
+                <Search className="h-5 w-5" />
+              </button>
               <input
+                id="desktop-internship-search"
                 type="text"
-                placeholder="Search..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search internships..."
                 className="w-64 pl-10 pr-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
-            </div>
+            </form>
           </div>
 
           {/* Right Section: User & Theme Toggle */}
@@ -185,13 +212,13 @@ export const Navbar = () => {
                       </div>
                       <div className="py-1">
                         <Link
-                          to="/profile"
+                          to="/profile-setup"
                           className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
                           role="menuitem"
                           onClick={() => setIsMenuOpen(false)}
                         >
                           <UserIcon className="h-4 w-4" />
-                          <span>Your Profile</span>
+                          <span>Profile setup</span>
                         </Link>
                         <button
                           onClick={handleLogout}
@@ -269,17 +296,56 @@ export const Navbar = () => {
                 ]} 
                 isMobile 
               />
-              <div className="relative px-2 pt-2">
-                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                 <input type="text" placeholder="Search..." className="w-full pl-10 pr-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800" />
-              </div>
+              <form role="search" onSubmit={handleSearch} className="relative px-2 pt-2">
+                <label htmlFor="mobile-internship-search" className="sr-only">Search internships</label>
+                <button
+                  type="submit"
+                  disabled={!searchQuery.trim()}
+                  aria-label="Search internships"
+                  className="absolute left-5 top-[calc(50%+0.25rem)] -translate-y-1/2 text-gray-400 disabled:cursor-not-allowed"
+                >
+                  <Search className="h-5 w-5" />
+                </button>
+                <input
+                  id="mobile-internship-search"
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search internships..."
+                  className="w-full pl-10 pr-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </form>
               <div className="px-2 pt-4 border-t border-gray-200 dark:border-gray-800">
-                <button className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-full hover:bg-indigo-700">Upgrade</button>
-                <Link to="/login" className="block text-center mt-2 text-sm font-medium text-gray-600 dark:text-gray-300">Sign In / Sign Up</Link>
-                <div className="mt-4 flex items-center justify-center">
-                    <div className="w-8 h-8 bg-gray-300 dark:bg-gray-700 rounded-full"></div>
-                    <span className="ml-2 text-sm">User Profile</span>
-                </div>
+                {isAuthenticated ? (
+                  <div className="flex items-center justify-between gap-3 px-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {user?.picture ? (
+                        <img src={user.picture} alt="" className="h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+                          <UserIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
+                        </span>
+                      )}
+                      <span className="truncate text-sm font-medium">{user?.name || 'Account'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign out
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    to="/login"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="block rounded-lg px-4 py-2 text-center text-sm font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+                  >
+                    Sign in / Sign up
+                  </Link>
+                )}
               </div>
             </div>
           </motion.div>

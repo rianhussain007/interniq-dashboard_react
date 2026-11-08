@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Bookmark, CalendarDays, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { apiRequest, internshipSearchPath, semanticInternshipSearchPath, type ApplicationRecord, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -106,8 +107,10 @@ const InternshipCard = ({
 
 export const InternshipFeed = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const routeQuery = searchParams.get('q') ?? '';
   const [allInternships, setAllInternships] = useState<Internship[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(routeQuery);
   const [searchMode, setSearchMode] = useState<'keyword' | 'semantic'>('keyword');
   const [location, setLocation] = useState('');
   const [source, setSource] = useState('All');
@@ -123,6 +126,18 @@ export const InternshipFeed = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [paginationError, setPaginationError] = useState<string | null>(null);
   const paginationController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    setSearchTerm(routeQuery);
+  }, [routeQuery]);
+
+  const handleSearchTermChange = (value: string) => {
+    setSearchTerm(value);
+    const nextParams = new URLSearchParams(searchParams);
+    if (value.trim()) nextParams.set('q', value);
+    else nextParams.delete('q');
+    setSearchParams(nextParams, { replace: true });
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -335,7 +350,7 @@ export const InternshipFeed = () => {
                       placeholder={searchMode === 'semantic' ? 'Describe the role you want...' : 'Title, company...'}
                       value={searchTerm}
                       disabled={searchMode === 'semantic'}
-                      onChange={e => setSearchTerm(e.target.value)}
+                      onChange={e => handleSearchTermChange(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-70"
                     />
                   </div>
