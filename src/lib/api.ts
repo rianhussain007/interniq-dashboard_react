@@ -56,6 +56,7 @@ export type InternshipSearchParams = {
   q?: string;
   location?: string;
   source?: string;
+  mode?: string;
   limit?: number;
   offset?: number;
 };
@@ -65,6 +66,7 @@ function internshipSearchQuery(params: InternshipSearchParams) {
   if (params.q) searchParams.set('q', params.q);
   if (params.location) searchParams.set('location', params.location);
   if (params.source && params.source !== 'All') searchParams.set('source', params.source);
+  if (params.mode && params.mode !== 'All') searchParams.set('mode', params.mode);
   if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
   if (params.offset !== undefined) searchParams.set('offset', String(params.offset));
   return searchParams.toString();

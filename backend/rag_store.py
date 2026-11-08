@@ -220,6 +220,7 @@ def search_internships_semantic(
     query: str,
     location: str | None = None,
     source: str | None = None,
+    mode: str | None = None,
     limit: int = 24,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
@@ -239,6 +240,9 @@ def search_internships_semantic(
     if source:
         filters.append("internship.source = %s")
         params.append(source)
+    if mode:
+        filters.append("internship.mode ilike %s")
+        params.append(f"%{mode}%")
 
     params.extend([limit, offset])
     with conn.cursor() as cur:

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Bookmark, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
+import { Bookmark, CalendarDays, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { apiRequest, internshipSearchPath, semanticInternshipSearchPath, type ApplicationRecord, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -33,8 +33,15 @@ const InternshipCard = ({
       </div>
       <div className="flex items-center text-gray-600 dark:text-gray-400 mt-2 text-sm">
         <Briefcase className="h-4 w-4 mr-2 flex-shrink-0" />
-        <span>{internship.stipend || internship.mode || 'Not Disclosed'}</span>
+        <span>{internship.mode || 'Work mode not disclosed'}</span>
       </div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Stipend: {internship.stipend || 'Not disclosed'}</p>
+      {internship.deadline && (
+        <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <CalendarDays className="h-4 w-4" />
+          <span>Apply by {new Date(`${internship.deadline}T00:00:00`).toLocaleDateString()}</span>
+        </div>
+      )}
       {internship.last_seen_at && (
         <div className="mt-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
           <Clock3 className="h-3.5 w-3.5" />
@@ -104,6 +111,7 @@ export const InternshipFeed = () => {
   const [searchMode, setSearchMode] = useState<'keyword' | 'semantic'>('keyword');
   const [location, setLocation] = useState('');
   const [source, setSource] = useState('All');
+  const [mode, setMode] = useState('All');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -132,6 +140,7 @@ export const InternshipFeed = () => {
           q: searchTerm.trim() || undefined,
           location: location.trim() || undefined,
           source,
+          mode,
           limit: PAGE_SIZE,
           offset: 0,
         };
@@ -160,7 +169,7 @@ export const InternshipFeed = () => {
       controller.abort();
       paginationController.current?.abort();
     };
-  }, [searchTerm, searchMode, location, source, retryCount]);
+  }, [searchTerm, searchMode, location, source, mode, retryCount]);
 
   const loadMore = async () => {
     if (!hasMore || loadingMore) return;
@@ -175,6 +184,7 @@ export const InternshipFeed = () => {
         q: searchTerm.trim() || undefined,
         location: location.trim() || undefined,
         source,
+        mode,
         limit: PAGE_SIZE,
         offset,
       };
@@ -366,6 +376,20 @@ export const InternshipFeed = () => {
                     <option>Internshala</option>
                     <option>LinkedIn</option>
                     <option>Naukri</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="work-mode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Work mode</label>
+                  <select
+                    id="work-mode"
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option>All</option>
+                    <option>Remote</option>
+                    <option>Hybrid</option>
+                    <option>On-site</option>
                   </select>
                 </div>
               </div>

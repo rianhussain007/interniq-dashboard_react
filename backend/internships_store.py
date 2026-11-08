@@ -197,6 +197,7 @@ def search_internships(
     query: str | None = None,
     location: str | None = None,
     source: str | None = None,
+    mode: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
@@ -218,6 +219,9 @@ def search_internships(
     if source:
         filters.append("source = %s")
         params.append(source)
+    if mode:
+        filters.append("mode ilike %s")
+        params.append(f"%{mode}%")
 
     where_clause = f"where {' and '.join(filters)}" if filters else ""
     params.extend([limit, offset])
