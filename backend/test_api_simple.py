@@ -1,11 +1,19 @@
+import os
 import requests
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
+
+api_key = os.getenv("INTERNSHIP_API_KEY")
+if not api_key:
+    raise RuntimeError("INTERNSHIP_API_KEY is required to run this test.")
 
 # Test API endpoint with timeout
 url = "https://internships-api.p.rapidapi.com/active-jb-7d"
 headers = {
     "x-rapidapi-host": "internships-api.p.rapidapi.com",
-    "x-rapidapi-key": "a5b3ee4f9bmshca746057e17b35cp12273bjsn793f63ebf22e"
+    "x-rapidapi-key": api_key
 }
 
 print("Testing API endpoint with 10-second timeout...")

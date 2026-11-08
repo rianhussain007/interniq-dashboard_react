@@ -1,21 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, Briefcase } from 'lucide-react';
-
-// Define the shape of an internship object for TypeScript
-interface Internship {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  stipend: string;
-  apply_link: string;
-  source: 'LinkedIn' | 'Internshala' | 'Naukri';
-}
-
-
-
-
-const InternshipCard = ({ internship }: { internship: Internship }) => (
+import { Bookmark, CheckCircle2, ExternalLink, FileCheck, MapPin, Search, Briefcase } from 'lucide-react';
+import { apiRequest, internshipSearchPath, type Internship } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
+const InternshipCard = ({
+  internship,
+  onSave,
+  onTrack,
+  actionState,
+}: {
+  internship: Internship;
+  onSave: (internshipId: string) => void;
+  onTrack: (internshipId: string) => void;
+  actionState?: string;
+}) => (
   <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col">
     <div className="flex-grow">
       <div className="flex justify-between items-start">
@@ -31,58 +28,65 @@ const InternshipCard = ({ internship }: { internship: Internship }) => (
       </div>
       <div className="flex items-center text-gray-600 dark:text-gray-400 mt-2 text-sm">
         <Briefcase className="h-4 w-4 mr-2 flex-shrink-0" />
-        <span>{internship.stipend || 'Not Disclosed'}</span>
+        <span>{internship.stipend || internship.mode || 'Not Disclosed'}</span>
       </div>
+      {internship.skills && internship.skills.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {internship.skills.slice(0, 4).map((skill) => (
+            <span key={skill} className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200">
+              {skill}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
-    <a 
-      href={internship.apply_link}
-      target="_blank" 
-      rel="noopener noreferrer"
-      className="block text-center w-full mt-6 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors duration-300"
-    >
-      Apply Now
-    </a>
+    <div className="mt-6 grid grid-cols-3 gap-2">
+      <button
+        onClick={() => onSave(internship.id)}
+        className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+        aria-label={`Save ${internship.title}`}
+      >
+        {actionState === 'saved' ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Bookmark className="h-4 w-4" />}
+      </button>
+      <button
+        onClick={() => onTrack(internship.id)}
+        className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+        aria-label={`Track application for ${internship.title}`}
+      >
+        {actionState === 'applied' ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <FileCheck className="h-4 w-4" />}
+      </button>
+      <a
+        href={internship.apply_link}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+        aria-label={`Open application link for ${internship.title}`}
+      >
+        <ExternalLink className="h-4 w-4" />
+      </a>
+    </div>
   </div>
 );
 
 export const InternshipFeed = () => {
+  const { user } = useAuth();
   const [allInternships, setAllInternships] = useState<Internship[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [location, setLocation] = useState('');
   const [source, setSource] = useState('All');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Use a hardcoded URL to bypass TypeScript issues with import.meta.env
-  const apiBaseUrl = 'http://localhost:8001';
+  const [actionState, setActionState] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchInternships = async () => {
       try {
         setLoading(true);
-        console.log('Fetching internships from:', `${apiBaseUrl}/api/internships`);
-        
-        // Add cache-busting parameter to avoid cached responses
-        const timestamp = new Date().getTime();
-        const response = await fetch(`${apiBaseUrl}/api/internships?t=${timestamp}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-          },
-          credentials: 'include'  // Important for CORS with credentials if needed
-        });
-        
-        console.log('Response status:', response.status);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Error response:', errorText);
-          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        console.log('Received data:', data);
+        const data = await apiRequest<Internship[]>(internshipSearchPath({
+          q: searchTerm.trim() || undefined,
+          location: location.trim() || undefined,
+          source,
+        }));
         setAllInternships(data);
         setError(null);
       } catch (err: unknown) {
@@ -96,17 +100,39 @@ export const InternshipFeed = () => {
       }
     };
 
-    fetchInternships();
-  }, [apiBaseUrl]);
+    const timeoutId = window.setTimeout(fetchInternships, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm, location, source]);
+
+  const handleSave = async (internshipId: string) => {
+    if (!user?.id) return;
+    try {
+      await apiRequest('/api/saved', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: user.id, internship_id: internshipId }),
+      });
+      setActionState((current) => ({ ...current, [internshipId]: 'saved' }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save internship.');
+    }
+  };
+
+  const handleTrack = async (internshipId: string) => {
+    if (!user?.id) return;
+    try {
+      await apiRequest('/api/applications', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: user.id, internship_id: internshipId, status: 'applied' }),
+      });
+      setActionState((current) => ({ ...current, [internshipId]: 'applied' }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not track application.');
+    }
+  };
 
   const filteredInternships = useMemo(() => {
-    return allInternships.filter(internship => {
-      const matchesSearch = internship.title.toLowerCase().includes(searchTerm.toLowerCase()) || internship.company.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesLocation = location ? internship.location.toLowerCase().includes(location.toLowerCase()) : true;
-      const matchesSource = source !== 'All' ? internship.source === source : true;
-      return matchesSearch && matchesLocation && matchesSource;
-    });
-  }, [searchTerm, location, source, allInternships]);
+    return allInternships;
+  }, [allInternships]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
@@ -158,6 +184,7 @@ export const InternshipFeed = () => {
                     <option>All</option>
                     <option>Internshala</option>
                     <option>LinkedIn</option>
+                    <option>Naukri</option>
                   </select>
                 </div>
               </div>
@@ -186,7 +213,7 @@ export const InternshipFeed = () => {
                   <pre className="mt-2 p-3 bg-white dark:bg-gray-800 rounded overflow-auto text-sm">
                     {JSON.stringify({
                       error: error || 'Unknown error',
-                      apiUrl: `${apiBaseUrl}/api/internships`,
+                      apiUrl: internshipSearchPath({ q: searchTerm, location, source }),
                       timestamp: new Date().toISOString()
                     }, null, 2)}
                   </pre>
@@ -195,7 +222,7 @@ export const InternshipFeed = () => {
                   <p className="font-medium">Troubleshooting Steps:</p>
                   <ol className="list-decimal list-inside text-left max-w-md mx-auto space-y-1">
                     <li>Make sure the backend server is running</li>
-                    <li>Check if you can access the API directly: <a href={`${apiBaseUrl}/api/internships`} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Open API</a></li>
+                    <li>Check if the backend has a valid PostgreSQL `DATABASE_URL`</li>
                     <li>Verify the API URL in your .env file is correct</li>
                   </ol>
                 </div>
@@ -204,7 +231,13 @@ export const InternshipFeed = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {filteredInternships.length > 0 ? (
                   filteredInternships.map(internship => (
-                    <InternshipCard key={internship.id} internship={internship} />
+                    <InternshipCard
+                      key={internship.id}
+                      internship={internship}
+                      onSave={handleSave}
+                      onTrack={handleTrack}
+                      actionState={actionState[internship.id]}
+                    />
                   ))
                 ) : (
                   <div className="lg:col-span-2 text-center py-12">

@@ -4,6 +4,11 @@ requests
 beautifulsoup4
 lxml
 python-dotenv
+psycopg[binary]
 PyMuPDF
 selenium
 python-multipart
+langchain-core>=1.0,<2.0
+langchain-text-splitters>=1.0,<2.0
+langchain-google-genai>=4.0,<5.0
+langchain-groq>=1.0,<2.0

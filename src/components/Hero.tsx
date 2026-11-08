@@ -15,6 +15,7 @@ import {
   Target,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
 
 type StatCard = {
   label: string;
@@ -32,6 +33,15 @@ type MentorMessage = {
   id: number;
   role: 'mentor' | 'student';
   message: string;
+  sources?: { title: string; source_id: string; source_type: string; similarity: number }[];
+  nextSteps?: string[];
+  suggestedInternships?: {
+    internship_id: string;
+    title: string;
+    company: string;
+    apply_link?: string | null;
+    reason: string;
+  }[];
 };
 
 const stats: StatCard[] = [
@@ -67,17 +77,16 @@ const initialTasks: ChecklistTask[] = [
   { id: 'star-practice', label: 'Practice STAR interview questions' },
 ];
 
-const initialMessages: MentorMessage[] = [
-  {
-    id: 1,
-    role: 'mentor',
-    message: 'Hi Rian, I am ready to help you turn your data science and developer work into interview-ready proof.',
-  },
-];
-
 export const Hero = () => {
+  const { user } = useAuth();
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set(['github-profile']));
-  const [messages, setMessages] = useState<MentorMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<MentorMessage[]>(() => [
+    {
+      id: 1,
+      role: 'mentor',
+      message: `Hi ${user?.name || 'there'}, ask me about roles, skill gaps, or your application plan.`,
+    },
+  ]);
   const [mentorInput, setMentorInput] = useState('');
   const [isMentorTyping, setIsMentorTyping] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -121,7 +130,7 @@ export const Hero = () => {
     setIsMentorTyping(true);
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
       const response = await fetch(`${apiBaseUrl}/api/mentor-chat`, {
         method: 'POST',
         headers: {
@@ -129,6 +138,14 @@ export const Hero = () => {
         },
         body: JSON.stringify({
           message: trimmedInput,
+          user_id: user?.id,
+          user_profile: user
+            ? {
+                name: user.name,
+                email: user.email,
+                authProvider: user.authProvider,
+              }
+            : undefined,
           history: messages.map((message) => ({
             role: message.role === 'mentor' ? 'assistant' : 'user',
             content: message.message,
@@ -141,13 +158,21 @@ export const Hero = () => {
         throw new Error(errorData.detail || 'Mentor service is unavailable.');
       }
 
-      const data = await response.json() as { answer?: string };
+      const data = await response.json() as {
+        answer?: string;
+        sources?: { title: string; source_id: string; source_type: string; similarity: number }[];
+        next_steps?: string[];
+        suggested_internships?: MentorMessage['suggestedInternships'];
+      };
       setMessages((current) => [
         ...current,
         {
           id: Date.now() + 1,
           role: 'mentor',
           message: data.answer || 'I could not generate a response just now. Please try again.',
+          sources: data.sources?.slice(0, 3),
+          nextSteps: data.next_steps?.slice(0, 5),
+          suggestedInternships: data.suggested_internships?.slice(0, 3),
         },
       ]);
     } catch (error) {
@@ -182,7 +207,7 @@ export const Hero = () => {
                 Data scientist career cockpit
               </div>
               <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
-                Welcome back, Rian!
+                Welcome back, {user?.name || 'there'}!
                 <motion.span
                   className="ml-3 inline-block origin-bottom-right"
                   animate={{ rotate: [0, 14, -8, 12, 0] }}
@@ -332,7 +357,45 @@ export const Hero = () => {
                         : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-950/70 dark:text-zinc-200'
                     )}
                   >
-                    {message.message}
+                    <p>{message.message}</p>
+                    {message.role === 'mentor' && message.nextSteps && message.nextSteps.length > 0 && (
+                      <div className="mt-3 rounded-xl bg-white/70 p-3 dark:bg-white/5">
+                        <p className="mb-1 text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Next steps</p>
+                        <ul className="list-disc space-y-1 pl-4 text-sm">
+                          {message.nextSteps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {message.role === 'mentor' && message.suggestedInternships && message.suggestedInternships.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Recommended internships</p>
+                        {message.suggestedInternships.map((internship) => (
+                          <a
+                            key={internship.internship_id}
+                            href={internship.apply_link || '/internships'}
+                            target={internship.apply_link ? '_blank' : undefined}
+                            rel={internship.apply_link ? 'noopener noreferrer' : undefined}
+                            className="block rounded-xl border border-zinc-200 bg-white/70 p-3 transition hover:border-indigo-300 dark:border-zinc-700 dark:bg-white/5 dark:hover:border-indigo-500"
+                          >
+                            <span className="block font-semibold text-zinc-800 dark:text-zinc-100">{internship.title}</span>
+                            <span className="block text-xs text-zinc-500 dark:text-zinc-400">{internship.company}</span>
+                            <span className="mt-1 block text-xs leading-5">{internship.reason}</span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {message.role === 'mentor' && message.sources && message.sources.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {message.sources.map((source) => (
+                          <span
+                            key={`${source.source_type}-${source.source_id}`}
+                            className="rounded-full bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300"
+                          >
+                            {source.source_type.replace('_', ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}

@@ -1,127 +1,81 @@
 #!/usr/bin/env python3
 """
-Script to update internship data by running all available scrapers
-and integrating the results with the InternIQ dashboard.
+Run all internship scrapers and upsert normalized results into PostgreSQL.
 """
 
 import os
 import sys
-import json
-from datetime import datetime
+from typing import Any
 
-# Add the project root to the path so we can import the scraper modules
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(project_root)
+from dotenv import load_dotenv
 
-# Import scraper classes
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
+sys.path.append(PROJECT_ROOT)
+sys.path.append(BACKEND_DIR)
+
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+
+from db import get_db_connection
+from internships_store import upsert_internships
+from rag_store import reindex_rag
 from scraper.scrapers.internshala_scraper import InternshalaScraper
 from scraper.scrapers.linkedin_scraper import LinkedInScraper
 from scraper.scrapers.naukri_scraper import NaukriScraper
 
-# --- Configuration ---
-DATA_FILE = os.path.join(project_root, 'data', 'internships.json')
-BACKUP_DIR = os.path.join(project_root, 'data')
 
-# List of scrapers to run
 ENABLED_SCRAPERS = [
     InternshalaScraper(),
     LinkedInScraper(),
     NaukriScraper(),
 ]
 
-def load_from_json(filepath=DATA_FILE):
-    """Loads data from a JSON file."""
-    if not os.path.exists(filepath):
-        return []
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError) as e:
-        print(f"Error loading {filepath}: {e}")
-        return []
 
-def save_to_json(data, filepath=DATA_FILE):
-    """Saves data to a JSON file."""
-    try:
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4)
-        return True
-    except IOError as e:
-        print(f"Error saving to {filepath}: {e}")
-        return False
-
-def update_internship_data():
-    """Update internship data by running all scrapers and merging with existing data."""
-    print("🔄 Updating Internship Data")
-    print("=" * 50)
-
-    # 1. Load existing data
-    existing_data = load_from_json()
-    print(f"📊 Found {len(existing_data)} existing internships.")
-
-    # 2. Scrape new data from all enabled sources
-    all_new_data = []
+def scrape_all() -> list[dict[str, Any]]:
+    all_items: list[dict[str, Any]] = []
     for scraper in ENABLED_SCRAPERS:
         try:
-            scraped_data = scraper.scrape()
-            all_new_data.extend(scraped_data)
-        except Exception as e:
-            print(f"❌ Error running {scraper.site_name} scraper: {e}")
+            scraped_items = scraper.scrape()
+            all_items.extend(scraped_items)
+            print(f"{scraper.site_name}: scraped {len(scraped_items)} internships.")
+        except Exception as exc:
+            print(f"{scraper.site_name}: scraper failed: {exc}")
+    return all_items
 
-    if not all_new_data:
-        print("\n❌ No new data was scraped from any source. Aborting update.")
+
+def update_internship_data() -> bool:
+    print("InternIQ PostgreSQL internship updater")
+    print("=" * 50)
+
+    scraped_items = scrape_all()
+    if not scraped_items:
+        print("No internships were scraped. Nothing to upsert.")
         return False
 
-    print(f"\n✅ Scraped a total of {len(all_new_data)} internships from {len(ENABLED_SCRAPERS)} sources.")
+    with get_db_connection() as conn:
+        summary = upsert_internships(conn, scraped_items)
+        indexed = reindex_rag(conn)
 
-    # 3. Merge data (avoid duplicates based on a unique key)
-    merged_data = existing_data.copy()
-    existing_keys = {f"{item.get('title', '')}_{item.get('company', '')}_{item.get('source', '')}" for item in existing_data}
+    print(f"Upserted internships: {summary['upserted']}")
+    print(f"Skipped invalid records: {summary['skipped']}")
+    print(f"Indexed internship chunks: {indexed['internships']}")
+    print(f"Indexed career guidance documents: {indexed['career_guidance']}")
+    return True
 
-    new_count = 0
-    for item in all_new_data:
-        key = f"{item.get('title', '')}_{item.get('company', '')}_{item.get('source', '')}"
-        if key not in existing_keys:
-            item['id'] = len(merged_data) + 1 # Assign a new, simple integer ID
-            merged_data.append(item)
-            existing_keys.add(key)
-            new_count += 1
 
-    print(f"📈 Added {new_count} new unique internships.")
-    print(f"📊 Total internships now: {len(merged_data)}")
+def main() -> None:
+    try:
+        success = update_internship_data()
+    except RuntimeError as exc:
+        print(f"Configuration error: {exc}")
+        print("Set DATABASE_URL and initialize the schema with: python backend/init_db.py")
+        raise SystemExit(2) from exc
+    except Exception as exc:
+        print(f"Update failed: {exc}")
+        raise SystemExit(1) from exc
 
-    # 4. Save merged data and create a backup
-    if new_count > 0:
-        print("\n💾 Saving updated data...")
-        # Create a backup before overwriting
-        backup_filename = os.path.join(BACKUP_DIR, f"internships_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-        if save_to_json(existing_data, backup_filename):
-            print(f"📦 Backup of old data created: {os.path.basename(backup_filename)}")
-        else:
-            print("⚠️ Could not create a backup.")
+    raise SystemExit(0 if success else 1)
 
-        # Save the new merged data
-        if save_to_json(merged_data):
-            print("✅ Data successfully saved!")
-            return True
-        else:
-            print("❌ Failed to save updated data.")
-            return False
-    else:
-        print("\n✨ No new internships to add. Data is already up-to-date.")
-        return True
-
-def main():
-    """Main entry point for the script."""
-    print("🚀 InternIQ - Modular Internship Data Updater")
-    print("=" * 50)
-    success = update_internship_data()
-    print("-" * 50)
-    if success:
-        print("\n✅ Update process completed successfully!")
-    else:
-        print("\n❌ Update process failed. Please check the error messages above.")
 
 if __name__ == "__main__":
     main()

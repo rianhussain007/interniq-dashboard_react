@@ -11,6 +11,8 @@ import GitHubTrackerPage from './pages/GitHubTrackerPage';
 import ResumeAnalyzerPage from './pages/ResumeAnalyzerPage';
 import ProfileSetupPage from './pages/ProfileSetupPage';
 import LoginPage from './pages/Login';
+import Applications from './pages/Applications';
+import Saved from './pages/Saved';
 
 // New page components
 import ResumeBuilderPage from './pages/ResumeBuilderPage';
@@ -90,6 +92,18 @@ const AppRoutes = () => (
     <Route path="/profile-setup" element={
       <ProtectedRoute>
         <ProfileSetupPage />
+      </ProtectedRoute>
+    } />
+
+    <Route path="/applications" element={
+      <ProtectedRoute>
+        <Applications />
+      </ProtectedRoute>
+    } />
+
+    <Route path="/saved" element={
+      <ProtectedRoute>
+        <Saved />
       </ProtectedRoute>
     } />
 

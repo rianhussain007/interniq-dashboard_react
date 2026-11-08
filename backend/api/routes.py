@@ -1,14 +1,13 @@
 import os
-import json
+import sys
 import subprocess
 from fastapi import APIRouter, HTTPException, BackgroundTasks, File, UploadFile
+from db import get_db_connection
+from internships_store import list_internships
 from services.resume_parser import extract_text_from_pdf, analyze_resume_text
 
 # --- Configuration ---
-# The script assumes it's run from the 'backend' directory.
-# Paths are relative to the project root (one level up from 'backend').
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_FILE = os.path.join(PROJECT_ROOT, 'data', 'internships.json')
 SCRAPER_SCRIPT = os.path.join(PROJECT_ROOT, 'scraper', 'update_internships.py')
 
 router = APIRouter()
@@ -18,7 +17,7 @@ def run_scraper_script():
     """Executes the scraper script using subprocess."""
     print(f"Starting scraper: {SCRAPER_SCRIPT}")
     try:
-        subprocess.run(["python", SCRAPER_SCRIPT], check=True, capture_output=True, text=True)
+        subprocess.run([sys.executable, SCRAPER_SCRIPT], cwd=PROJECT_ROOT, check=True, capture_output=True, text=True)
         print("Scraper script finished successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Error running scraper script: {e.stderr}")
@@ -28,15 +27,14 @@ def run_scraper_script():
 # --- API Endpoints ---
 @router.get("/internships")
 def get_internships():
-    """Returns the list of internships from the JSON file."""
+    """Returns the list of internships from PostgreSQL."""
     try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Internship data file not found. Please run the scraper first.")
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Error decoding internship data. The JSON file might be corrupt.")
+        with get_db_connection() as conn:
+            return list_internships(conn)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Database operation failed: {exc}") from exc
 
 @router.post("/scrape")
 def scrape_internships(background_tasks: BackgroundTasks):

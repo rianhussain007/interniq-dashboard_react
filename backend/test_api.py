@@ -1,8 +1,13 @@
 import os
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Test API key directly
-api_key = "a5b3ee4f9bmshca746057e17b35cp12273bjsn793f63ebf22e"
+api_key = os.getenv("INTERNSHIP_API_KEY")
+if not api_key:
+    raise RuntimeError("INTERNSHIP_API_KEY is required to run this test.")
 url = "https://internships-api.p.rapidapi.com/active-jb-7d"
 headers = {
     "x-rapidapi-host": "internships-api.p.rapidapi.com",

@@ -97,6 +97,8 @@ export const Navbar = () => {
               title="Dashboard" 
               items={[
                 { name: 'Internships', path: '/internships' },
+                { name: 'Applications', path: '/applications' },
+                { name: 'Saved', path: '/saved' },
                 { name: 'Branding Tips', path: '/branding-tips' },
                 { name: 'GitHub Tracker', path: '/github-tracker' },
                 { name: 'Resume Analyzer', path: '/resume-analyzer' },
@@ -258,6 +260,8 @@ export const Navbar = () => {
                 title="Dashboard" 
                 items={[
                   { name: 'Internships', path: '/internships' },
+                  { name: 'Applications', path: '/applications' },
+                  { name: 'Saved', path: '/saved' },
                   { name: 'Branding Tips', path: '/branding-tips' },
                   { name: 'GitHub Tracker', path: '/github-tracker' },
                   { name: 'Resume Analyzer', path: '/resume-analyzer' },

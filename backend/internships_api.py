@@ -1,10 +1,13 @@
 
 import os
 import requests
-import json
 from dotenv import load_dotenv
 
-load_dotenv()
+from db import get_db_connection
+from internships_store import upsert_internships
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 def fetch_internships_from_api():
     api_key = os.getenv("INTERNSHIP_API_KEY")
@@ -31,10 +34,10 @@ def fetch_internships_from_api():
             "link": job.get("job_apply_link")
         })
 
-    with open('backend/data/internships.json', 'w') as f:
-        json.dump(normalized_data, f, indent=4)
+    with get_db_connection() as conn:
+        summary = upsert_internships(conn, normalized_data)
 
-    return len(normalized_data)
+    return summary["upserted"]
 
 if __name__ == '__main__':
     fetch_internships_from_api()

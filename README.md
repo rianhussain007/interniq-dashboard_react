@@ -1,145 +1,205 @@
 # InternIQ Dashboard
 
-InternIQ is a full-stack web application designed to help students and professionals find and track internship opportunities. It features a Python-based web scraper, a FastAPI backend, and a modern React frontend.
+InternIQ is a full-stack internship aggregation and AI career assistant platform for students. The current app includes a React dashboard, FastAPI backend, Python scraping pipeline, and a mentor assistant. The target production architecture is GCP: Firebase Hosting for the frontend, Cloud Run for FastAPI, Cloud SQL PostgreSQL with pgvector for data/RAG storage, Cloud Scheduler + Cloud Run Jobs for scraper automation, Secret Manager for credentials, and Cloud Logging/Error Reporting for operations.
 
-## Features
+## Current Features
 
-- **Automated Internship Scraping:** Gathers the latest internship postings from various sources.
-- **Dynamic Frontend:** A responsive and interactive UI built with React, TypeScript, and Tailwind CSS.
-- **Robust Backend:** A powerful and scalable API built with FastAPI.
-- **Search and Filtering:** Easily search and filter internships by title, location, and domain.
-- **One-Click Scrape:** Manually trigger the scraper to get the latest data on-demand.
-- **Toast Notifications:** User-friendly feedback for asynchronous actions like scraping.
+- Internship aggregation from scraper/API sources.
+- React, TypeScript, Vite, and Tailwind dashboard.
+- FastAPI backend with CORS and environment-based configuration.
+- Search and filtering for internships.
+- On-demand internship update endpoint.
+- Retrieval-augmented mentor using LangChain, Gemini embeddings, PostgreSQL/pgvector, and schema-validated Groq output.
+- Scrape-to-search indexing: normalize postings, split them into overlapping chunks, embed only changed chunks, and update pgvector in the same database transaction.
+- Mentor responses include grounded next steps, source references, and validated internship recommendations.
+
+## Build Roadmap
+
+1. [x] Fix integration paths across React, FastAPI, scraper, and docs.
+2. [x] Store normalized internship records in PostgreSQL.
+3. [x] Save internships and track applications.
+4. [x] Add LangChain chunking, Gemini embeddings, pgvector retrieval, and structured mentor output.
+5. [x] Connect the mentor response and recommendations to the dashboard.
+6. [ ] Replace demo authentication and authorize private API data on the backend.
+7. [ ] Dockerize and deploy the backend to Cloud Run.
+8. [ ] Deploy the frontend to Firebase Hosting or Cloud Storage + Cloud CDN.
+9. [ ] Schedule scraper jobs with Cloud Scheduler and Cloud Run Jobs.
 
 ## Tech Stack
 
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS, `react-hot-toast`
-- **Backend:** Python, FastAPI, `python-dotenv`, BeautifulSoup
-- **Deployment:** Vercel (Frontend), Render (Backend)
+- Frontend: React, TypeScript, Vite, Tailwind CSS.
+- Backend: Python, FastAPI, LangChain, Gemini embeddings, Groq chat, python-dotenv, BeautifulSoup, Selenium.
+- Current data store: PostgreSQL.
+- RAG vector store: PostgreSQL + pgvector.
+- Planned deployment: GCP Cloud Run, Cloud SQL, Firebase Hosting, Cloud Scheduler, Secret Manager, Cloud Storage.
 
----
-
-## Local Development Setup
-
-Follow these steps to run the application on your local machine.
+## Local Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or later)
-- [Python](https://www.python.org/) (v3.8 or later) and `pip`
+- Node.js 18 or later.
+- Python 3.10 or later.
+- pip.
 
-### 1. Clone the Repository
+### Environment
+
+Copy the root environment example:
 
 ```bash
-git clone https://github.com/your-username/interniq-dashboard_react.git
-cd interniq-dashboard_react
+cp .env.example .env
 ```
 
-### 2. Backend Setup
+For local development, these defaults are expected:
 
-1.  **Navigate to the backend directory:**
-    ```bash
-    cd backend
-    ```
+```env
+VITE_API_BASE_URL="http://127.0.0.1:8000"
+ALLOWED_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interniq"
+DB_CONNECT_TIMEOUT_SECONDS="10"
+GROQ_API_KEY="your-groq-api-key"
+GROQ_MODEL="openai/gpt-oss-20b"
+GEMINI_API_KEY="your-gemini-api-key"
+GEMINI_EMBEDDING_MODEL="gemini-embedding-2-preview"
+RAG_EMBEDDING_DIMENSIONS="768"
+RAG_TOP_K="6"
+RAG_CHUNK_SIZE="900"
+RAG_CHUNK_OVERLAP="120"
+```
 
-2.  **Create and activate a virtual environment:**
-    ```bash
-    # For Windows
-    python -m venv venv
-    .\venv\Scripts\activate
+The frontend only reads `VITE_*` variables. Backend-only secrets such as `GROQ_API_KEY` must not be exposed through `VITE_*` variables.
 
-    # For macOS/Linux
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
+### Backend
 
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+From the project root:
 
-4.  **Set up environment variables:**
-    Copy the example file and leave the default values for local development.
-    ```bash
-    cp .env.example .env
-    ```
+```bash
+cd backend
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
 
-5.  **Run the initial scrape to generate data:**
-    ```bash
-    python ../scraper/update_internships.py
-    ```
+Health check:
 
-6.  **Start the backend server:**
-    ```bash
-    uvicorn main:app --reload
-    ```
-    The API will be running at `http://127.0.0.1:8000`.
+```bash
+curl http://127.0.0.1:8000/api/health
+```
 
-### 3. Frontend Setup
+Initialize the PostgreSQL schema before running internship routes:
 
-1.  **Navigate to the project root directory (from the `backend` folder):**
-    ```bash
-    cd ..
-    ```
+```bash
+python init_db.py
+```
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+The scraper automatically refreshes the RAG index after upserting postings. To build or refresh it manually after changing the embedding model or chunk settings:
 
-3.  **Set up environment variables:**
-    Copy the example file. The default URL should work with the local backend.
-    ```bash
-    cp .env.example .env
-    ```
+```bash
+curl -X POST http://127.0.0.1:8000/api/rag/reindex -H "Content-Type: application/json" -d "{}"
+```
 
-4.  **Start the frontend development server:**
-    ```bash
-    npm run dev
-    ```
-    The frontend will be accessible at `http://localhost:5173`.
+### Scraper
 
----
+The scraper writes normalized internship records directly into PostgreSQL:
 
-## Deployment
+```bash
+python scraper/update_internships.py
+```
 
-### Deploying the Backend to Render
+The backend update endpoint runs the same scraper:
 
-1.  **Sign up** for a [Render](https://render.com/) account.
-2.  **Create a new "Web Service"** and connect your GitHub repository.
-3.  **Configure the service:**
-    -   **Name:** `interniq-backend` (or your choice)
-    -   **Root Directory:** `backend`
-    -   **Environment:** `Python 3`
-    -   **Build Command:** `pip install -r requirements.txt`
-    -   **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4.  **Add Environment Variables:**
-    -   Go to the "Environment" tab for your new service.
-    -   Add a variable with the key `ALLOWED_ORIGINS` and set the value to your Vercel frontend URL (e.g., `https://your-app-name.vercel.app`).
-5.  **Deploy.** Once complete, Render will provide you with a public URL for your backend (e.g., `https://interniq-backend.onrender.com`).
+```bash
+curl -X POST http://127.0.0.1:8000/api/internships/update
+```
 
-### Deploying the Frontend to Vercel
+### Frontend
 
-1.  **Sign up** for a [Vercel](https://vercel.com/) account.
-2.  **Create a new project** and connect your GitHub repository.
-3.  **Configure the project:**
-    -   Vercel should automatically detect that it's a Vite project and configure the build settings correctly.
-    -   **Framework Preset:** `Vite`
-    -   **Root Directory:** `.` (leave as default)
-4.  **Add Environment Variables:**
-    -   Go to the project's "Settings" -> "Environment Variables".
-    -   Add a variable with the key `VITE_API_BASE_URL` and set the value to your **Render backend URL** from the previous step.
-5.  **Deploy.** Your site will be live at a public Vercel URL.
+From the project root:
 
----
+```bash
+npm install
+npm run dev
+```
 
-### Are the Frontend and Backend Production-Ready?
+The app should be available at `http://localhost:5173` and call the backend through `VITE_API_BASE_URL`.
 
-**Yes.** With the changes we've made, both the frontend and backend are now production-ready.
+## API Routes
 
--   **Configuration:** Both applications load sensitive data (like API URLs and CORS origins) from environment variables, which is a security best practice.
--   **CORS:** The backend is properly configured to only accept requests from your deployed frontend, preventing unauthorized access.
--   **Scalability:** The chosen hosting platforms (Vercel and Render) are designed for production workloads and can scale as your user base grows.
--   **Automation:** The deployment process is automated through Git, making updates simple and reliable.
+Current routes:
 
-Your InternIQ dashboard is now fully prepared for the world. Let me know if you have any other questions!
+- `GET /api/health`
+- `GET /api/internships`
+- `GET /api/internships/search`
+- `POST /api/internships/update`
+- `GET /api/saved?user_id=...`
+- `POST /api/saved`
+- `GET /api/applications?user_id=...`
+- `POST /api/applications`
+- `POST /api/mentor-chat`
+- `POST /api/rag/reindex`
+
+## RAG Assistant
+
+The mentor assistant and indexing job use a multi-step LangChain flow:
+
+1. Scrapers normalize internship records and save them to PostgreSQL.
+2. LangChain's recursive splitter creates 900-character chunks with 120-character overlap.
+3. Gemini embeddings are generated for changed chunks and stored in PostgreSQL with pgvector.
+4. A user question is embedded and pgvector retrieves the closest chunks, including user-scoped profile, saved roles, and application history.
+5. LangChain's Groq integration returns a schema-validated answer, next steps, and recommendations restricted to retrieved internship IDs.
+
+The database schema uses 768-dimensional vectors. If changing the embedding dimension, update `backend/schema.sql`, clear or migrate the derived knowledge index, then run the reindex endpoint.
+
+Knowledge sources currently indexed:
+
+- internship postings
+- career guidance docs from `backend/data/mentor_memory.json`
+- user profile passed from the React auth context
+- saved internships
+- application history
+
+The default embedding model is `gemini-embedding-2-preview`, used through LangChain's text embedding interface. The model remains configurable; changing it causes existing chunks to be re-embedded on the next reindex.
+
+## GCP Deployment Target
+
+### Frontend
+
+Use Firebase Hosting or Cloud Storage + Cloud CDN. Configure:
+
+```env
+VITE_API_BASE_URL="https://your-cloud-run-backend-url"
+```
+
+### Backend
+
+Use Cloud Run with a containerized FastAPI service. Runtime configuration should come from Cloud Run environment variables and Secret Manager:
+
+```env
+ALLOWED_ORIGINS="https://your-firebase-project.web.app"
+GROQ_API_KEY="secret-manager-value"
+GROQ_MODEL="openai/gpt-oss-20b"
+```
+
+```env
+DATABASE_URL="postgresql://..."
+```
+
+### Database
+
+Use Cloud SQL PostgreSQL with `pgvector` enabled.
+
+### Scraper Automation
+
+Use Cloud Scheduler to trigger a Cloud Run Job that runs the scraper on a fixed cadence. The pipeline writes normalized internship records to PostgreSQL, then chunks and indexes them in pgvector.
+
+### Storage And Monitoring
+
+- Store uploaded resumes and related files in Cloud Storage.
+- Store secrets in Secret Manager.
+- Use Cloud Logging and Error Reporting for backend and scraper observability.
+
+## Notes
+
+The local scrape → chunk → embed → retrieve → structured response workflow is implemented. Containerization, hosted deployment, and scheduled scraper operations remain next steps.
+
+Email/password login currently uses a local demo session, and private API routes accept a client-supplied `user_id`. Add verified authentication and backend authorization before exposing saved internships or application history to public users.
