@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import GoogleLoginButton from '../components/GoogleLoginButton';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -73,14 +74,26 @@ const LoginPageContent: React.FC = () => {
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{isSignUp ? 'Save roles and build your internship plan' : 'Sign in to continue to your dashboard'}</p>
           </div>
 
+          {!isSupabaseConfigured && (
+            <div role="alert" className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+              <p className="font-semibold">Sign-in is not connected yet</p>
+              <p className="mt-1">
+                This deployment needs <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> configured before accounts can sign in or register. After adding them to the frontend environment, restart or redeploy the app.
+              </p>
+              <Link to="/internships" className="mt-2 inline-block font-medium underline underline-offset-2">
+                Browse internships without an account
+              </Link>
+            </div>
+          )}
+
           {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-md">
+            <div role="alert" className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-md">
               {error}
             </div>
           )}
 
           {notice && (
-            <div className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200">
+            <div role="status" className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200">
               {notice}
             </div>
           )}
@@ -128,7 +141,7 @@ const LoginPageContent: React.FC = () => {
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isLoading || !email || !password}
+                disabled={isLoading || !isSupabaseConfigured || !email || !password}
                 className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
