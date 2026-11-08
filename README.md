@@ -100,6 +100,8 @@ INTERNSHIP_ASHBY_BOARDS="ramp:Ramp,notion:Notion"
 
 Jobicy's public feed is also checked and its source URL is retained. Listings are deduplicated in SQLite. Sources can change their public board slugs or have no open internships on a given day; refresh output reports each source's status and count. LinkedIn is intentionally not crawled.
 
+The source-provided posting date is not always the date a role was last renewed: some public boards return old-dated records that remain on the live board. InternIQ shows when it last saw each listing, but the employer's application page is the authority on whether a role is still accepting applications.
+
 A new local database starts with an empty internships table. Use **Refresh live listings** to retrieve currently published internships from connected employer boards; InternIQ does not add invented companies or roles to the feed. Keyword search ranks by title, skills, company, description, and profile-skill overlap, and freshness only breaks ties, so unrelated postings are not returned as matches. In SQLite mode, role matching works offline by expanding the query with role concepts and the student's profile skills, returning a normalized ranking signal plus matched profile skills.
 
 ### Backend
