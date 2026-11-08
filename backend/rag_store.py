@@ -245,7 +245,7 @@ def search_internships_semantic(
         filters.append("internship.mode ilike %s")
         params.append(f"%{mode}%")
 
-    params.extend([limit, offset])
+    candidate_limit = max(200, limit * 20)
     if sort == "deadline":
         order_by = "deadline asc nulls last, distance, coalesce(posted_date, created_at::date) desc, created_at desc"
     elif sort == "recent":
@@ -263,6 +263,8 @@ def search_internships_semantic(
                 join internships as internship
                   on internship.id::text = kd.source_id
                 where {' and '.join(filters)}
+                order by kd.embedding <=> %s::vector
+                limit %s
             ),
             best_matches as (
                 select distinct on (id) *
@@ -274,7 +276,7 @@ def search_internships_semantic(
             order by {order_by}
             limit %s offset %s
             """,
-            (query_vector, *params),
+            (query_vector, *params, query_vector, candidate_limit, limit, offset),
         )
         rows = cur.fetchall()
 

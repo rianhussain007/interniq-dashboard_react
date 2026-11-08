@@ -8,7 +8,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - React, TypeScript, Vite, and Tailwind dashboard.
 - FastAPI backend with CORS and environment-based configuration.
 - Keyword and AI search with location/source/work-mode filters, deadline sorting, and closing-soon cues.
-- Optional authenticated semantic search ranked by the existing pgvector internship index.
+- Optional authenticated semantic search uses pgvector nearest neighbors, then applies recency/deadline sorting within the matched candidate set.
 - Account-based saved listings and application tracking with editable status and private notes.
 - On-demand internship update endpoint.
 - Scraper update responses expose per-source and indexing totals as structured JSON.
