@@ -6,6 +6,24 @@ import { useAuth } from '../contexts/AuthContext';
 
 const PAGE_SIZE = 24;
 
+const getDaysUntilDeadline = (deadline: string) => {
+  const [year, month, day] = deadline.split('-').map(Number);
+  if (!year || !month || !day) return null;
+
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDate = Date.UTC(year, month - 1, day);
+  const parsedDueDate = new Date(dueDate);
+  if (
+    parsedDueDate.getUTCFullYear() !== year
+    || parsedDueDate.getUTCMonth() !== month - 1
+    || parsedDueDate.getUTCDate() !== day
+  ) return null;
+
+  const daysUntil = Math.round((dueDate - today) / 86_400_000);
+  return daysUntil >= 0 ? daysUntil : null;
+};
+
 const InternshipCard = ({
   internship,
   onSave,
@@ -18,7 +36,22 @@ const InternshipCard = ({
   onTrack: (internshipId: string) => void;
   actionState?: { saved?: boolean; applied?: boolean };
   pendingActions: Record<string, boolean>;
-}) => (
+}) => {
+  const daysUntilDeadline = internship.deadline
+    ? getDaysUntilDeadline(internship.deadline)
+    : null;
+  const deadlineUrgency = daysUntilDeadline === 0
+    ? 'Closes today'
+    : daysUntilDeadline === 1
+      ? 'Closes tomorrow'
+      : daysUntilDeadline !== null
+        ? `Closes in ${daysUntilDeadline} days`
+        : null;
+  const deadlineUrgencyClass = daysUntilDeadline !== null && daysUntilDeadline <= 3
+    ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
+    : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300';
+
+  return (
   <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col">
     <div className="flex-grow">
       <div className="flex justify-between items-start">
@@ -56,6 +89,11 @@ const InternshipCard = ({
         <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <CalendarDays className="h-4 w-4" />
           <span>Apply by {new Date(`${internship.deadline}T00:00:00`).toLocaleDateString()}</span>
+          {deadlineUrgency && daysUntilDeadline !== null && daysUntilDeadline <= 7 && (
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${deadlineUrgencyClass}`}>
+              {deadlineUrgency}
+            </span>
+          )}
         </div>
       )}
       {internship.last_seen_at && (
@@ -118,7 +156,8 @@ const InternshipCard = ({
       )}
     </div>
   </div>
-);
+  );
+};
 
 export const InternshipFeed = () => {
   const { user } = useAuth();
