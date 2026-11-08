@@ -20,6 +20,7 @@ from auth import authenticated_user_id, require_admin_token, require_authenticat
 from db import get_db_connection
 from embeddings import GeminiEmbeddingClient
 from internships_store import (
+    get_dashboard_summary,
     list_applications,
     list_internships,
     list_saved_internships,
@@ -106,6 +107,13 @@ class MentorChatResponse(BaseModel):
     suggested_internships: list[MentorInternshipSuggestion] = Field(default_factory=list)
 
 
+class DashboardSummary(BaseModel):
+    applications_tracked: int
+    interviewing: int
+    offers: int
+    saved_internships: int
+
+
 class SaveInternshipRequest(BaseModel):
     user_id: str = Field(min_length=1)
     internship_id: UUID
@@ -135,6 +143,18 @@ def db_http_error(exc: Exception) -> HTTPException:
     if isinstance(exc, UniqueViolation):
         return HTTPException(status_code=409, detail="A conflicting record already exists.")
     return HTTPException(status_code=500, detail="Database or indexing operation failed.")
+
+
+@app.get("/api/dashboard/summary", response_model=DashboardSummary)
+def dashboard_summary_route(
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+) -> DashboardSummary:
+    user_id = authenticated_user_id(current_user)
+    try:
+        with get_db_connection() as conn:
+            return DashboardSummary(**get_dashboard_summary(conn, user_id))
+    except Exception as exc:
+        raise db_http_error(exc) from exc
 
 
 def build_rag_context(docs: list[dict[str, Any]]) -> str:

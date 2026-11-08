@@ -306,3 +306,27 @@ def list_applications(conn: Connection, user_id: str) -> list[dict[str, Any]]:
                 }
             )
         return results
+
+
+def get_dashboard_summary(conn: Connection, user_id: str) -> dict[str, int]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            select
+                (select count(*) from applications where user_id = %s) as applications_tracked,
+                (select count(*) from applications where user_id = %s and status = 'interviewing') as interviewing,
+                (select count(*) from applications where user_id = %s and status = 'offer') as offers,
+                (select count(*) from saved_internships where user_id = %s) as saved_internships
+            """,
+            (user_id, user_id, user_id, user_id),
+        )
+        row = cur.fetchone()
+        return {
+            key: int(row[key])
+            for key in (
+                "applications_tracked",
+                "interviewing",
+                "offers",
+                "saved_internships",
+            )
+        }

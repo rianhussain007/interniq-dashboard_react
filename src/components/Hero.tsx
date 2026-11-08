@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ArrowUpRight,
+  Award,
+  Bookmark,
   Bot,
   Briefcase,
   Check,
   Circle,
-  Code2,
-  FileText,
   GraduationCap,
   MessageSquare,
   Send,
@@ -20,9 +19,16 @@ import { useAuth } from '../contexts/AuthContext';
 
 type StatCard = {
   label: string;
-  value: string;
+  metric: keyof DashboardSummary;
   helper: string;
   icon: React.ElementType;
+};
+
+type DashboardSummary = {
+  applications_tracked: number;
+  interviewing: number;
+  offers: number;
+  saved_internships: number;
 };
 
 type ChecklistTask = {
@@ -45,30 +51,30 @@ type MentorMessage = {
   }[];
 };
 
-const stats: StatCard[] = [
+const statDefinitions: StatCard[] = [
   {
-    label: 'Applications Sent',
-    value: '12',
-    helper: '+4 this week',
+    label: 'Applications Tracked',
+    metric: 'applications_tracked',
+    helper: 'Across all statuses',
     icon: Briefcase,
   },
   {
-    label: 'Interviews Scheduled',
-    value: '2',
-    helper: '1 technical, 1 HR',
+    label: 'Interviewing',
+    metric: 'interviewing',
+    helper: 'Marked as interviewing',
     icon: GraduationCap,
   },
   {
-    label: 'Resume Score',
-    value: '85%',
-    helper: 'Strong ATS match',
-    icon: FileText,
+    label: 'Offers',
+    metric: 'offers',
+    helper: 'Marked as an offer',
+    icon: Award,
   },
   {
-    label: 'Portfolio Projects',
-    value: '3',
-    helper: '2 ready to showcase',
-    icon: Code2,
+    label: 'Saved Internships',
+    metric: 'saved_internships',
+    helper: 'In your shortlist',
+    icon: Bookmark,
   },
 ];
 
@@ -80,7 +86,11 @@ const initialTasks: ChecklistTask[] = [
 
 export const Hero = () => {
   const { user } = useAuth();
-  const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set(['github-profile']));
+  const [completedTasks, setCompletedTasks] = useState<Set<string>>(() => new Set());
+  const [checklistOwner, setChecklistOwner] = useState<string | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState(false);
   const [messages, setMessages] = useState<MentorMessage[]>(() => [
     {
       id: 1,
@@ -92,10 +102,87 @@ export const Hero = () => {
   const [isMentorTyping, setIsMentorTyping] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setCompletedTasks(new Set());
+      setChecklistOwner(null);
+      return;
+    }
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(`interniq:checklist:${user.id}`) || '[]');
+      const validTasks = Array.isArray(stored)
+        ? stored.filter((task): task is string =>
+            typeof task === 'string' && initialTasks.some((item) => item.id === task)
+          )
+        : [];
+      setCompletedTasks(new Set(validTasks));
+    } catch {
+      setCompletedTasks(new Set());
+    }
+    setChecklistOwner(user.id);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || checklistOwner !== user.id) return;
+
+    try {
+      localStorage.setItem(`interniq:checklist:${user.id}`, JSON.stringify([...completedTasks]));
+    } catch {
+      // Keep the checklist usable when browser storage is unavailable.
+    }
+  }, [checklistOwner, completedTasks, user?.id]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!user?.id) {
+      setSummary(null);
+      setSummaryLoading(false);
+      setSummaryError(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setSummary(null);
+    setSummaryLoading(true);
+    setSummaryError(false);
+    void apiRequest<DashboardSummary>('/api/dashboard/summary')
+      .then((data) => {
+        if (active) setSummary(data);
+      })
+      .catch(() => {
+        if (active) {
+          setSummary(null);
+          setSummaryError(true);
+        }
+      })
+      .finally(() => {
+        if (active) setSummaryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
   const completionPercent = useMemo(
     () => Math.round((completedTasks.size / initialTasks.length) * 100),
     [completedTasks]
   );
+
+  const stats = statDefinitions.map((stat) => ({
+    ...stat,
+    value: summary ? String(summary[stat.metric]) : summaryLoading ? '…' : '—',
+    helper: summary
+      ? stat.helper
+      : summaryError
+        ? 'Could not load this metric'
+        : summaryLoading
+          ? 'Loading your data'
+          : 'No data available',
+  }));
 
   useEffect(() => {
     messagesRef.current?.scrollTo({
@@ -194,7 +281,7 @@ export const Hero = () => {
             <div>
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/70 px-3 py-1 text-sm font-medium text-zinc-600 dark:border-zinc-800 dark:bg-white/5 dark:text-zinc-300">
                 <Sparkles className="h-4 w-4 text-indigo-500" />
-                Data scientist career cockpit
+                Internship search cockpit
               </div>
               <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
                 Welcome back, {user?.name || 'there'}!
@@ -209,13 +296,13 @@ export const Hero = () => {
                 </motion.span>
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:text-lg">
-                You are 3 milestones away from being fully interview-ready this week.
+                Track your application pipeline, save roles, and get practical next steps from your career mentor.
               </p>
             </div>
 
             <div className="rounded-2xl border border-zinc-200 bg-white/75 p-4 dark:border-zinc-800 dark:bg-zinc-950/40">
               <div className="mb-2 flex items-center justify-between gap-6">
-                <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">Weekly readiness</span>
+                <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">Checklist progress</span>
                 <span className="text-sm font-black text-indigo-600 dark:text-indigo-300">{completionPercent}%</span>
               </div>
               <div className="h-2 w-64 max-w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
@@ -244,10 +331,7 @@ export const Hero = () => {
                     <stat.icon className="h-5 w-5" />
                   </div>
                   <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{stat.label}</p>
-                  <div className="mt-2 flex items-end justify-between gap-3">
-                    <p className="text-3xl font-black">{stat.value}</p>
-                    <ArrowUpRight className="h-5 w-5 text-zinc-300 transition group-hover:text-indigo-400" />
-                  </div>
+                  <p className="mt-2 text-3xl font-black">{stat.value}</p>
                   <p className="mt-2 text-xs font-medium text-zinc-500">{stat.helper}</p>
                 </motion.div>
               ))}
@@ -263,7 +347,7 @@ export const Hero = () => {
                 <div>
                   <h2 className="text-2xl font-black">My Next Steps</h2>
                   <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    Complete these to sharpen your interview readiness.
+                    Small actions to keep your internship search moving. Saved in this browser for your account.
                   </p>
                 </div>
                 <span className="inline-flex w-fit items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-700 dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-200">
@@ -319,9 +403,8 @@ export const Hero = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="font-black">Meet Your AI Mentor</h2>
-                    <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.75)]" />
                   </div>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">AI Active</p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Ask about roles, skill gaps, or next steps</p>
                 </div>
               </div>
             </div>
