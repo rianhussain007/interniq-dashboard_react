@@ -18,7 +18,13 @@ const LoginPageContent: React.FC = () => {
   const { login, signUp, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+  const redirectLocation = (location.state as {
+    from?: { pathname?: string; search?: string; hash?: string };
+  } | null)?.from;
+  const redirectPath = redirectLocation?.pathname;
+  const from = redirectPath?.startsWith('/') && !redirectPath.startsWith('//')
+    ? `${redirectPath}${redirectLocation?.search ?? ''}${redirectLocation?.hash ?? ''}`
+    : '/';
 
   // Redirect if already authenticated
   useEffect(() => {
