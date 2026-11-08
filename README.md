@@ -168,7 +168,7 @@ python -m pip install -r backend/requirements-dev.txt
 python -m pytest
 ```
 
-The frontend interaction suite runs in a simulated browser; backend tests use fake providers and storage connections where appropriate. Neither suite requires API keys or a live database. CI runs frontend lint, interaction tests and build, backend tests and syntax checks, and a backend container build.
+The eleven frontend interaction tests run in a simulated browser, including internship search, guest sign-in return, semantic-search routing, save, application tracking, and the structured mentor interaction; backend tests use fake providers and storage connections where appropriate. Neither suite requires API keys or a live database. CI runs frontend lint, interaction tests and build, backend tests and syntax checks, and a backend container build.
 
 The older scripts named `backend/test_api*.py` and `backend/scraper/test_api*.py` are manual RapidAPI connectivity probes, not application tests. They may call an external service and require a valid API key; the default pytest suite intentionally does not collect them.
 
