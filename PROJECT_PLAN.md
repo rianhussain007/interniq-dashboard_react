@@ -8,7 +8,7 @@ Assessment date: 2026-11-08. This is an evidence-based engineering estimate for 
 | --- | ---: | --- | --- |
 | Agentic aggregator prototype | 80% | Scraper normalization, chunking, embedding/index interfaces, pgvector retrieval, structured mentor output, search filters, and deterministic unit/API tests are implemented. The public feed, guest sign-in return, and mobile layout now pass Chromium checks with controlled API data; semantic retrieval routing is covered with a controlled response. | No configured database/model/auth provider, so no real scrape → index → retrieve → grounded answer run or provider-backed authenticated journey has been exercised. |
 | Whole dashboard prototype | 82% | Core dashboard, search, saved/application flows, resume analyzer, and all six previously empty career-tool routes now have usable workflows. Eleven interaction tests and three Chromium smoke tests cover career tools, public search, guest sign-in return, mobile layout, a protected resume-builder route, and structured mentor requests/responses. | A full visual review of every tool, print output, and PDF edge case remains; API responses and the browser auth session in automated UI tests are controlled fixtures. |
-| Production readiness | 45% | GitHub CI passed for [`0234ad0`](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42506572141), including frontend lint, strict type-checking, eleven simulated-browser interaction tests, build, 15 deterministic backend tests, Python syntax checks, and backend container build. `npm audit` reports zero vulnerabilities. | No provisioned staging environment, live-provider evidence, deployed app, production secrets, monitoring/alert checks, recovery exercise, or user acceptance results. |
+| Production readiness | 45% | GitHub CI passed for [`7f201bc`](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42509057655), including frontend lint, strict type-checking, eleven interaction tests, three Chromium smoke tests, build, 15 deterministic backend tests, Python syntax checks, and backend container build. Local `npm audit` reports zero vulnerabilities. | No provisioned staging environment, live-provider evidence, deployed app, production secrets, monitoring/alert checks, recovery exercise, or user acceptance results. |
 
 These estimates track implementation and operating evidence separately. A compiled feature is not counted as a live integration. The prototype can be demonstrated today with controlled sample data; the current workspace cannot honestly demonstrate a live end-to-end service.
 
@@ -38,7 +38,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 
 ### A. Full local and UI verification
 
-- [x] Local frontend lint, strict typecheck, production build, eleven frontend interaction tests, three Chromium smoke tests, 15 backend tests, and `npm audit` pass.
+- [x] Local frontend lint, strict typecheck, production build, eleven frontend interaction tests, three Chromium smoke tests, 15 backend tests, and `npm audit` pass. GitHub CI passed for `7f201bc` ([run](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42509057655)).
 - [x] Exercise public feed, guest sign-in return, mobile feed layout, and the protected resume-builder route in Chromium with controlled local data.
 - [ ] Visually review every career-tool route, print output, invalid PDF cases, and responsive layouts beyond the internship feed.
 - [x] Add automated frontend interaction coverage for all six career tools.
@@ -83,7 +83,7 @@ Do not raise the rating on the basis of added code, a successful build, or mocke
 
 ## Time estimate and dependencies
 
-- Eleven frontend interaction tests, three Chromium smoke tests, 15 backend tests, strict frontend type-checking, and the production build pass locally. The latest passing GitHub Actions run predates Chromium coverage; CI for that addition is pending. Live staging and production remain gated on external services and credentials.
+- Eleven frontend interaction tests, three Chromium smoke tests, 15 backend tests, strict frontend type-checking, the production build, and GitHub CI pass for the tested code on `7f201bc`. Live staging and production remain gated on external services and credentials.
 - A first staging integration pass is estimated at **0.5–1.5 focused days after** valid database, model-provider, auth, and cloud access are available. Provider approval, database provisioning, or source-site changes can extend that calendar time.
 - Production launch time is not responsibly estimable until staging results, product acceptance, monitoring, and operating ownership are known.
 - At the last workspace audit, `.env`, provider credentials, a live PostgreSQL/pgvector instance, and cloud project access were unavailable. No TRL above the local prototype level is supported by evidence yet.
