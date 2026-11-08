@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Bookmark, CheckCircle2, ExternalLink, FileCheck, MapPin, Search, Briefcase } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bookmark, CheckCircle2, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { apiRequest, internshipSearchPath, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 const InternshipCard = ({
@@ -7,11 +7,13 @@ const InternshipCard = ({
   onSave,
   onTrack,
   actionState,
+  pendingActions,
 }: {
   internship: Internship;
   onSave: (internshipId: string) => void;
   onTrack: (internshipId: string) => void;
-  actionState?: string;
+  actionState?: { saved?: boolean; applied?: boolean };
+  pendingActions: Record<string, boolean>;
 }) => (
   <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col">
     <div className="flex-grow">
@@ -43,17 +45,23 @@ const InternshipCard = ({
     <div className="mt-6 grid grid-cols-3 gap-2">
       <button
         onClick={() => onSave(internship.id)}
-        className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
-        aria-label={`Save ${internship.title}`}
+        disabled={pendingActions[`${internship.id}:save`]}
+        className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+        aria-label={actionState?.saved ? `${internship.title} saved` : `Save ${internship.title}`}
+        aria-pressed={Boolean(actionState?.saved)}
+        title={actionState?.saved ? 'Saved' : 'Save internship'}
       >
-        {actionState === 'saved' ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Bookmark className="h-4 w-4" />}
+        {pendingActions[`${internship.id}:save`] ? <Loader2 className="h-4 w-4 animate-spin" /> : actionState?.saved ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Bookmark className="h-4 w-4" />}
       </button>
       <button
         onClick={() => onTrack(internship.id)}
-        className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
-        aria-label={`Track application for ${internship.title}`}
+        disabled={pendingActions[`${internship.id}:track`]}
+        className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700"
+        aria-label={actionState?.applied ? `${internship.title} application tracked` : `Track application for ${internship.title}`}
+        aria-pressed={Boolean(actionState?.applied)}
+        title={actionState?.applied ? 'Application tracked' : 'Track application'}
       >
-        {actionState === 'applied' ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <FileCheck className="h-4 w-4" />}
+        {pendingActions[`${internship.id}:track`] ? <Loader2 className="h-4 w-4 animate-spin" /> : actionState?.applied ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <FileCheck className="h-4 w-4" />}
       </button>
       <a
         href={internship.apply_link}
@@ -76,63 +84,96 @@ export const InternshipFeed = () => {
   const [source, setSource] = useState('All');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionState, setActionState] = useState<Record<string, string>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionState, setActionState] = useState<Record<string, { saved?: boolean; applied?: boolean }>>({});
+  const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    const fetchInternships = async () => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+
+    const timeoutId = window.setTimeout(async () => {
       try {
-        setLoading(true);
         const data = await apiRequest<Internship[]>(internshipSearchPath({
           q: searchTerm.trim() || undefined,
           location: location.trim() || undefined,
           source,
-        }));
-        setAllInternships(data);
-        setError(null);
+        }), { signal: controller.signal });
+        if (!controller.signal.aborted) setAllInternships(data);
       } catch (err: unknown) {
-        console.error("Failed to fetch internships:", err);
-        const errorMessage = err instanceof Error
+        if (controller.signal.aborted) return;
+        console.error('Failed to fetch internships:', err);
+        setError(err instanceof Error
           ? err.message
-          : 'Failed to load internships. Please check your connection and try again.';
-        setError(errorMessage);
+          : 'Failed to load internships. Please check your connection and try again.');
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
-    };
+    }, 250);
 
-    const timeoutId = window.setTimeout(fetchInternships, 250);
-    return () => window.clearTimeout(timeoutId);
-  }, [searchTerm, location, source]);
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [searchTerm, location, source, retryCount]);
 
   const handleSave = async (internshipId: string) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setActionError('Sign in to save internships to your shortlist.');
+      return;
+    }
+    const actionKey = `${internshipId}:save`;
+    setActionError(null);
+    setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       await apiRequest('/api/saved', {
         method: 'POST',
         body: JSON.stringify({ user_id: user.id, internship_id: internshipId }),
       });
-      setActionState((current) => ({ ...current, [internshipId]: 'saved' }));
+      setActionState((current) => ({
+        ...current,
+        [internshipId]: { ...current[internshipId], saved: true },
+      }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save internship.');
+      setActionError(err instanceof Error ? err.message : 'Could not save internship.');
+    } finally {
+      setPendingActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
   };
 
   const handleTrack = async (internshipId: string) => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setActionError('Sign in to track internship applications.');
+      return;
+    }
+    const actionKey = `${internshipId}:track`;
+    setActionError(null);
+    setPendingActions((current) => ({ ...current, [actionKey]: true }));
     try {
       await apiRequest('/api/applications', {
         method: 'POST',
         body: JSON.stringify({ user_id: user.id, internship_id: internshipId, status: 'applied' }),
       });
-      setActionState((current) => ({ ...current, [internshipId]: 'applied' }));
+      setActionState((current) => ({
+        ...current,
+        [internshipId]: { ...current[internshipId], applied: true },
+      }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not track application.');
+      setActionError(err instanceof Error ? err.message : 'Could not track application.');
+    } finally {
+      setPendingActions((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     }
   };
-
-  const filteredInternships = useMemo(() => {
-    return allInternships;
-  }, [allInternships]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
@@ -193,6 +234,12 @@ export const InternshipFeed = () => {
 
           {/* Internship Listings */}
           <main className="md:w-3/4">
+            {actionError && (
+              <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+                <p>{actionError}</p>
+                <button type="button" onClick={() => setActionError(null)} className="font-semibold underline">Dismiss</button>
+              </div>
+            )}
             {loading ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {[...Array(6)].map((_, i) => (
@@ -208,35 +255,27 @@ export const InternshipFeed = () => {
             ) : error ? (
               <div className="text-center py-12 px-4">
                 <h2 className="text-2xl font-bold text-red-600 dark:text-red-400">Failed to Load Internships</h2>
-                <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg text-left max-w-2xl mx-auto">
-                  <p className="font-medium">Error Details:</p>
-                  <pre className="mt-2 p-3 bg-white dark:bg-gray-800 rounded overflow-auto text-sm">
-                    {JSON.stringify({
-                      error: error || 'Unknown error',
-                      apiUrl: internshipSearchPath({ q: searchTerm, location, source }),
-                      timestamp: new Date().toISOString()
-                    }, null, 2)}
-                  </pre>
-                </div>
-                <div className="mt-6 space-y-2">
-                  <p className="font-medium">Troubleshooting Steps:</p>
-                  <ol className="list-decimal list-inside text-left max-w-md mx-auto space-y-1">
-                    <li>Make sure the backend server is running</li>
-                    <li>Check if the backend has a valid PostgreSQL `DATABASE_URL`</li>
-                    <li>Verify the API URL in your .env file is correct</li>
-                  </ol>
-                </div>
+                <p className="mx-auto mt-3 max-w-xl text-sm text-gray-600 dark:text-gray-300">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => setRetryCount((count) => count + 1)}
+                  className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Try again
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredInternships.length > 0 ? (
-                  filteredInternships.map(internship => (
+                {allInternships.length > 0 ? (
+                  allInternships.map(internship => (
                     <InternshipCard
                       key={internship.id}
                       internship={internship}
                       onSave={handleSave}
                       onTrack={handleTrack}
                       actionState={actionState[internship.id]}
+                      pendingActions={pendingActions}
                     />
                   ))
                 ) : (
