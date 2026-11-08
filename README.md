@@ -48,7 +48,7 @@ The current provisional software readiness assessment is **TRL 4 (laboratory pro
 
 ### Prerequisites
 
-- Node.js 22 or later.
+- Node.js 22.12 or later.
 - Python 3.10 or later.
 - pip.
 
@@ -162,11 +162,13 @@ The app should be available at `http://localhost:5173` and call the backend thro
 Install the backend's development dependencies and run the deterministic backend suite from the project root:
 
 ```bash
+npm test
+npm run typecheck
 python -m pip install -r backend/requirements-dev.txt
 python -m pytest
 ```
 
-The tests use fake providers and storage connections where appropriate; they do not require API keys or a live database. CI also runs frontend lint/build, backend syntax checks, and a backend container build.
+The frontend interaction suite runs in a simulated browser; backend tests use fake providers and storage connections where appropriate. Neither suite requires API keys or a live database. CI runs frontend lint, interaction tests and build, backend tests and syntax checks, and a backend container build.
 
 The older scripts named `backend/test_api*.py` and `backend/scraper/test_api*.py` are manual RapidAPI connectivity probes, not application tests. They may call an external service and require a valid API key; the default pytest suite intentionally does not collect them.
 

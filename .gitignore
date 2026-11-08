@@ -5,4 +5,5 @@ dist/
 .next/
 .env
 .venv/
+.vitest/
 __pycache__/

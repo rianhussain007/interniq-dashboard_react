@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ExternalLink, FileCheck, Loader2, Save } from 'lucide-react';
 import { apiRequest, type ApplicationRecord } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Moon, Sun, Menu, X, User as UserIcon, LogOut } from 'lucide-react';
