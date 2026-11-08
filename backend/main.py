@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import subprocess
@@ -42,6 +43,17 @@ app = FastAPI()
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SCRAPER_SCRIPT = os.path.join(PROJECT_ROOT, "scraper", "update_internships.py")
+
+
+def parse_scraper_summary(output: str | None) -> dict[str, Any] | None:
+    for line in reversed((output or "").splitlines()):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and event.get("event") == "interniq_scrape_summary":
+            return event
+    return None
 
 
 def parse_allowed_origins() -> list[str]:
@@ -452,13 +464,20 @@ def update_internships(_admin_token: None = Depends(require_admin_token)):
             status_code=500,
             detail={
                 "message": "Internship scraper failed.",
+                "summary": parse_scraper_summary(exc.stdout),
                 "stdout": exc.stdout,
                 "stderr": exc.stderr,
             },
         ) from exc
 
+    summary = parse_scraper_summary(result.stdout)
     return {
-        "message": "Internships updated successfully",
+        "message": (
+            "Internships updated with partial source coverage"
+            if summary and summary.get("status") == "partial"
+            else "Internships updated successfully"
+        ),
+        "summary": summary,
         "stdout": result.stdout,
     }
 

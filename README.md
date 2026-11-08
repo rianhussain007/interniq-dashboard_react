@@ -11,6 +11,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - Optional authenticated semantic search ranked by the existing pgvector internship index.
 - Account-based saved listings and application tracking with editable status and private notes.
 - On-demand internship update endpoint.
+- Scraper update responses expose per-source and indexing totals as structured JSON.
 - Retrieval-augmented mentor using LangChain, Gemini embeddings, PostgreSQL/pgvector, and schema-validated Groq output.
 - Scrape-to-search indexing: normalize postings, split them into overlapping chunks, embed only changed chunks, and update pgvector in the same database transaction.
 - Mentor responses include grounded next steps, source references, and validated internship recommendations.
