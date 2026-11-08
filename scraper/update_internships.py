@@ -108,18 +108,35 @@ def update_internship_data() -> bool:
 
     with get_db_connection() as conn:
         summary = upsert_internships(conn, scraped_items)
-        if summary["upserted"] == 0:
-            message = "Every scraped record was invalid. Nothing was indexed."
-            print(message)
-            report_run(
-                "failed",
-                source_results,
-                scraped=len(scraped_items),
-                skipped=summary["skipped"],
-                message=message,
-            )
-            return False
-        indexed = reindex_rag(conn)
+
+    if summary["upserted"] == 0:
+        message = "Every scraped record was invalid. Nothing was indexed."
+        print(message)
+        report_run(
+            "failed",
+            source_results,
+            scraped=len(scraped_items),
+            skipped=summary["skipped"],
+            message=message,
+        )
+        return False
+
+    try:
+        # Keep provider/index failures from rolling back successfully stored listings.
+        with get_db_connection() as conn:
+            indexed = reindex_rag(conn)
+    except Exception as exc:
+        message = f"Internships were saved, but RAG reindex failed: {type(exc).__name__}: {exc}"
+        print(message)
+        report_run(
+            "index_failed",
+            source_results,
+            scraped=len(scraped_items),
+            upserted=summary["upserted"],
+            skipped=summary["skipped"],
+            message=message,
+        )
+        return False
 
     print(f"Upserted internships: {summary['upserted']}")
     print(f"Skipped invalid records: {summary['skipped']}")
