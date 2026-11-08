@@ -38,6 +38,12 @@ jobs:
       - name: Test frontend interactions
         run: npm test
 
+      - name: Install Chromium for browser smoke tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Test frontend in Chromium
+        run: npm run test:e2e
+
       - name: Build frontend
         run: npm run build
 

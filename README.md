@@ -163,12 +163,14 @@ Install the backend's development dependencies and run the deterministic backend
 
 ```bash
 npm test
+npx playwright install chromium
+npm run test:e2e
 npm run typecheck
 python -m pip install -r backend/requirements-dev.txt
 python -m pytest
 ```
 
-The eleven frontend interaction tests run in a simulated browser, including internship search, guest sign-in return, semantic-search routing, save, application tracking, and the structured mentor interaction; backend tests use fake providers and storage connections where appropriate. Neither suite requires API keys or a live database. CI runs frontend lint, interaction tests and build, backend tests and syntax checks, and a backend container build.
+The eleven frontend interaction tests use a simulated browser. Three Playwright tests run in Chromium against the Vite app and check public search, guest sign-in return, a mobile layout, and the protected resume builder with a synthetic test session. The UI tests use controlled API responses; backend tests use fake providers and storage connections where appropriate. These tests do not require API keys or a live database. CI runs frontend lint, both frontend test suites and build, backend tests and syntax checks, and a backend container build.
 
 The older scripts named `backend/test_api*.py` and `backend/scraper/test_api*.py` are manual RapidAPI connectivity probes, not application tests. They may call an external service and require a valid API key; the default pytest suite intentionally does not collect them.
 
