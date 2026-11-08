@@ -155,6 +155,25 @@ end $$;
 create index if not exists applications_user_id_idx
   on public.applications (user_id, updated_at desc);
 
+create table if not exists public.user_checklists (
+  user_id text primary key,
+  completed_task_ids text[] not null default '{}',
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+drop policy if exists "Users can manage their own checklist" on public.user_checklists;
+drop policy if exists "Users can read and manage their own checklist" on public.user_checklists;
+
+do $$
+begin
+  if to_regprocedure('auth.uid()') is not null then
+    execute 'alter table public.user_checklists enable row level security';
+    execute 'create policy "Users can read and manage their own checklist" on public.user_checklists for all to authenticated using (auth.uid()::text = user_id) with check (auth.uid()::text = user_id)';
+  else
+    execute 'alter table public.user_checklists disable row level security';
+  end if;
+end $$;
+
 create table if not exists public.knowledge_documents (
   id uuid default gen_random_uuid() primary key,
   source_type text not null,

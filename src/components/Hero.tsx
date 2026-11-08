@@ -31,6 +31,10 @@ type DashboardSummary = {
   saved_internships: number;
 };
 
+type ChecklistResponse = {
+  completed_task_ids: string[];
+};
+
 type ChecklistTask = {
   id: string;
   label: string;
@@ -87,7 +91,9 @@ const initialTasks: ChecklistTask[] = [
 export const Hero = () => {
   const { user } = useAuth();
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(() => new Set());
-  const [checklistOwner, setChecklistOwner] = useState<string | null>(null);
+  const [checklistLoading, setChecklistLoading] = useState(true);
+  const [checklistSaving, setChecklistSaving] = useState(false);
+  const [checklistError, setChecklistError] = useState(false);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState(false);
@@ -101,37 +107,41 @@ export const Hero = () => {
   const [mentorInput, setMentorInput] = useState('');
   const [isMentorTyping, setIsMentorTyping] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const checklistSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const pendingChecklistSaves = useRef(0);
 
   useEffect(() => {
     if (!user?.id) {
       setCompletedTasks(new Set());
-      setChecklistOwner(null);
+      setChecklistLoading(false);
       return;
     }
 
-    try {
-      const stored = JSON.parse(localStorage.getItem(`interniq:checklist:${user.id}`) || '[]');
-      const validTasks = Array.isArray(stored)
-        ? stored.filter((task): task is string =>
-            typeof task === 'string' && initialTasks.some((item) => item.id === task)
-          )
-        : [];
-      setCompletedTasks(new Set(validTasks));
-    } catch {
-      setCompletedTasks(new Set());
-    }
-    setChecklistOwner(user.id);
+    let active = true;
+    setChecklistLoading(true);
+    setChecklistError(false);
+    void apiRequest<ChecklistResponse>('/api/checklist')
+      .then((data) => {
+        if (!active) return;
+        const validTaskIds = data.completed_task_ids.filter((taskId) =>
+          initialTasks.some((task) => task.id === taskId)
+        );
+        setCompletedTasks(new Set(validTaskIds));
+      })
+      .catch(() => {
+        if (active) {
+          setCompletedTasks(new Set());
+          setChecklistError(true);
+        }
+      })
+      .finally(() => {
+        if (active) setChecklistLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [user?.id]);
-
-  useEffect(() => {
-    if (!user?.id || checklistOwner !== user.id) return;
-
-    try {
-      localStorage.setItem(`interniq:checklist:${user.id}`, JSON.stringify([...completedTasks]));
-    } catch {
-      // Keep the checklist usable when browser storage is unavailable.
-    }
-  }, [checklistOwner, completedTasks, user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -192,15 +202,39 @@ export const Hero = () => {
   }, [messages, isMentorTyping]);
 
   const toggleTask = (taskId: string) => {
-    setCompletedTasks((current) => {
-      const next = new Set(current);
-      if (next.has(taskId)) {
-        next.delete(taskId);
-      } else {
-        next.add(taskId);
-      }
-      return next;
-    });
+    if (!user?.id || checklistLoading) return;
+
+    const next = new Set(completedTasks);
+    if (next.has(taskId)) {
+      next.delete(taskId);
+    } else {
+      next.add(taskId);
+    }
+
+    const completedTaskIds = [...next];
+    setCompletedTasks(next);
+    setChecklistError(false);
+    pendingChecklistSaves.current += 1;
+    setChecklistSaving(true);
+
+    const request = checklistSaveQueue.current
+      .catch(() => undefined)
+      .then(() => apiRequest<ChecklistResponse>('/api/checklist', {
+        method: 'PUT',
+        body: JSON.stringify({
+          user_id: user.id,
+          completed_task_ids: completedTaskIds,
+        }),
+      }));
+    checklistSaveQueue.current = request.then(() => undefined, () => undefined);
+
+    void request
+      .then(() => setChecklistError(false))
+      .catch(() => setChecklistError(true))
+      .finally(() => {
+        pendingChecklistSaves.current -= 1;
+        if (pendingChecklistSaves.current === 0) setChecklistSaving(false);
+      });
   };
 
   const sendMentorMessage = async () => {
@@ -303,15 +337,26 @@ export const Hero = () => {
             <div className="rounded-2xl border border-zinc-200 bg-white/75 p-4 dark:border-zinc-800 dark:bg-zinc-950/40">
               <div className="mb-2 flex items-center justify-between gap-6">
                 <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">Checklist progress</span>
-                <span className="text-sm font-black text-indigo-600 dark:text-indigo-300">{completionPercent}%</span>
+                <span className="text-sm font-black text-indigo-600 dark:text-indigo-300">
+                  {checklistLoading ? 'Loading' : `${completionPercent}%`}
+                </span>
               </div>
               <div className="h-2 w-64 max-w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                 <motion.div
                   className="h-full rounded-full bg-indigo-500 shadow-[0_0_18px_rgba(99,102,241,0.65)]"
-                  animate={{ width: `${completionPercent}%` }}
+                  animate={{ width: `${checklistLoading ? 0 : completionPercent}%` }}
                   transition={{ type: 'spring', stiffness: 120, damping: 22 }}
                 />
               </div>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400" role="status" aria-live="polite">
+                {checklistLoading
+                  ? 'Loading your checklist…'
+                  : checklistSaving
+                    ? 'Saving to your account…'
+                    : checklistError
+                      ? 'Could not sync. Change a task to retry.'
+                      : 'Synced to your account'}
+              </p>
             </div>
           </div>
         </motion.div>
@@ -347,7 +392,7 @@ export const Hero = () => {
                 <div>
                   <h2 className="text-2xl font-black">My Next Steps</h2>
                   <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    Small actions to keep your internship search moving. Saved in this browser for your account.
+                    Small actions to keep your internship search moving.
                   </p>
                 </div>
                 <span className="inline-flex w-fit items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-700 dark:border-indigo-400/20 dark:bg-indigo-500/10 dark:text-indigo-200">
@@ -363,9 +408,12 @@ export const Hero = () => {
                   return (
                     <button
                       key={task.id}
+                      type="button"
                       onClick={() => toggleTask(task.id)}
+                      disabled={checklistLoading}
+                      aria-pressed={isComplete}
                       className={cn(
-                        'flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition duration-300',
+                        'flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition duration-300 disabled:cursor-wait disabled:opacity-60',
                         isComplete
                           ? 'border-emerald-300 bg-emerald-50 text-emerald-950 shadow-sm dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100'
                           : 'border-zinc-200 bg-zinc-50 hover:border-indigo-300 hover:bg-indigo-50/70 dark:border-zinc-800 dark:bg-zinc-950/40 dark:hover:border-indigo-400/40 dark:hover:bg-indigo-500/10'

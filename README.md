@@ -153,6 +153,8 @@ Current routes:
 - `GET /api/internships`
 - `GET /api/internships/search`
 - `GET /api/dashboard/summary`
+- `GET /api/checklist`
+- `PUT /api/checklist`
 - `POST /api/internships/update`
 - `GET /api/saved?user_id=...`
 - `POST /api/saved`
@@ -161,7 +163,7 @@ Current routes:
 - `POST /api/mentor-chat`
 - `POST /api/rag/reindex`
 
-Dashboard summary, saved internships, applications, and mentor chat require a valid Supabase bearer token. The backend verifies the token with Supabase and binds private records to that verified user ID. Scraping and full reindex require the admin header.
+Dashboard summary, checklist, saved internships, applications, and mentor chat require a valid Supabase bearer token. The backend verifies the token with Supabase and binds private records to that verified user ID. Checklist progress is stored per account in PostgreSQL and syncs across devices. Scraping and full reindex require the admin header.
 
 ## RAG Assistant
 

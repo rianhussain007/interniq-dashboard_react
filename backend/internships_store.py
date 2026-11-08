@@ -330,3 +330,34 @@ def get_dashboard_summary(conn: Connection, user_id: str) -> dict[str, int]:
                 "saved_internships",
             )
         }
+
+
+def get_user_checklist(conn: Connection, user_id: str) -> list[str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            "select completed_task_ids from user_checklists where user_id = %s",
+            (user_id,),
+        )
+        row = cur.fetchone()
+        return list(row["completed_task_ids"]) if row else []
+
+
+def save_user_checklist(
+    conn: Connection,
+    user_id: str,
+    completed_task_ids: list[str],
+) -> list[str]:
+    unique_task_ids = list(dict.fromkeys(completed_task_ids))
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into user_checklists (user_id, completed_task_ids)
+            values (%s, %s)
+            on conflict (user_id) do update set
+                completed_task_ids = excluded.completed_task_ids,
+                updated_at = now()
+            returning completed_task_ids
+            """,
+            (user_id, unique_task_ids),
+        )
+        return list(cur.fetchone()["completed_task_ids"])

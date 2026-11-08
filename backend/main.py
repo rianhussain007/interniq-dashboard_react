@@ -21,11 +21,13 @@ from db import get_db_connection
 from embeddings import GeminiEmbeddingClient
 from internships_store import (
     get_dashboard_summary,
+    get_user_checklist as load_user_checklist,
     list_applications,
     list_internships,
     list_saved_internships,
     save_internship,
     search_internships,
+    save_user_checklist as store_user_checklist,
     track_application,
 )
 from rag_store import index_user_context
@@ -114,6 +116,18 @@ class DashboardSummary(BaseModel):
     saved_internships: int
 
 
+ChecklistTaskId = Literal["resume-project", "github-profile", "star-practice"]
+
+
+class ChecklistResponse(BaseModel):
+    completed_task_ids: list[ChecklistTaskId] = Field(default_factory=list)
+
+
+class ChecklistUpdateRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    completed_task_ids: list[ChecklistTaskId] = Field(default_factory=list, max_length=3)
+
+
 class SaveInternshipRequest(BaseModel):
     user_id: str = Field(min_length=1)
     internship_id: UUID
@@ -153,6 +167,36 @@ def dashboard_summary_route(
     try:
         with get_db_connection() as conn:
             return DashboardSummary(**get_dashboard_summary(conn, user_id))
+    except Exception as exc:
+        raise db_http_error(exc) from exc
+
+
+@app.get("/api/checklist", response_model=ChecklistResponse)
+def checklist_route(
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+) -> ChecklistResponse:
+    user_id = authenticated_user_id(current_user)
+    try:
+        with get_db_connection() as conn:
+            return ChecklistResponse(completed_task_ids=load_user_checklist(conn, user_id))
+    except Exception as exc:
+        raise db_http_error(exc) from exc
+
+
+@app.put("/api/checklist", response_model=ChecklistResponse)
+def update_checklist_route(
+    payload: ChecklistUpdateRequest,
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+) -> ChecklistResponse:
+    user_id = authenticated_user_id(current_user, payload.user_id)
+    try:
+        with get_db_connection() as conn:
+            completed_task_ids = store_user_checklist(
+                conn,
+                user_id,
+                payload.completed_task_ids,
+            )
+            return ChecklistResponse(completed_task_ids=completed_task_ids)
     except Exception as exc:
         raise db_http_error(exc) from exc
 
