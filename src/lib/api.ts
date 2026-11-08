@@ -56,11 +56,15 @@ export function internshipSearchPath(params: {
   q?: string;
   location?: string;
   source?: string;
+  limit?: number;
+  offset?: number;
 }) {
   const searchParams = new URLSearchParams();
   if (params.q) searchParams.set('q', params.q);
   if (params.location) searchParams.set('location', params.location);
   if (params.source && params.source !== 'All') searchParams.set('source', params.source);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  if (params.offset !== undefined) searchParams.set('offset', String(params.offset));
   const query = searchParams.toString();
   return query ? `/api/internships/search?${query}` : '/api/internships';
 }

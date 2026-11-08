@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Bookmark, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { apiRequest, internshipSearchPath, type ApplicationRecord, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+
+const PAGE_SIZE = 24;
+
 const InternshipCard = ({
   internship,
   onSave,
@@ -106,11 +109,21 @@ export const InternshipFeed = () => {
   const [actionState, setActionState] = useState<Record<string, { saved?: boolean; applied?: boolean }>>({});
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
   const [retryCount, setRetryCount] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [paginationError, setPaginationError] = useState<string | null>(null);
+  const paginationController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setHasMore(false);
+    setOffset(0);
+    setLoadingMore(false);
+    setPaginationError(null);
+    paginationController.current?.abort();
 
     const timeoutId = window.setTimeout(async () => {
       try {
@@ -118,8 +131,14 @@ export const InternshipFeed = () => {
           q: searchTerm.trim() || undefined,
           location: location.trim() || undefined,
           source,
+          limit: PAGE_SIZE,
+          offset: 0,
         }), { signal: controller.signal });
-        if (!controller.signal.aborted) setAllInternships(data);
+        if (!controller.signal.aborted) {
+          setAllInternships(data);
+          setOffset(data.length);
+          setHasMore(data.length === PAGE_SIZE);
+        }
       } catch (err: unknown) {
         if (controller.signal.aborted) return;
         console.error('Failed to fetch internships:', err);
@@ -134,8 +153,44 @@ export const InternshipFeed = () => {
     return () => {
       window.clearTimeout(timeoutId);
       controller.abort();
+      paginationController.current?.abort();
     };
   }, [searchTerm, location, source, retryCount]);
+
+  const loadMore = async () => {
+    if (!hasMore || loadingMore) return;
+    const controller = new AbortController();
+    paginationController.current?.abort();
+    paginationController.current = controller;
+    setLoadingMore(true);
+    setPaginationError(null);
+
+    try {
+      const data = await apiRequest<Internship[]>(internshipSearchPath({
+        q: searchTerm.trim() || undefined,
+        location: location.trim() || undefined,
+        source,
+        limit: PAGE_SIZE,
+        offset,
+      }), { signal: controller.signal });
+      if (controller.signal.aborted) return;
+
+      setAllInternships((current) => {
+        const knownIds = new Set(current.map((internship) => internship.id));
+        return [...current, ...data.filter((internship) => !knownIds.has(internship.id))];
+      });
+      setOffset((current) => current + data.length);
+      setHasMore(data.length === PAGE_SIZE);
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      setPaginationError(err instanceof Error ? err.message : 'Could not load more internships.');
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoadingMore(false);
+        paginationController.current = null;
+      }
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -336,6 +391,20 @@ export const InternshipFeed = () => {
                     <p className="text-gray-500 mt-2">Try adjusting your filters to find more opportunities.</p>
                   </div>
                 )}
+              </div>
+            )}
+            {!loading && !error && hasMore && (
+              <div className="mt-8 flex flex-col items-center gap-3">
+                {paginationError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{paginationError}</p>}
+                <button
+                  type="button"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700"
+                >
+                  {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {loadingMore ? 'Loading…' : 'Load more internships'}
+                </button>
               </div>
             )}
           </main>
