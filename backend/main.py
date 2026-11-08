@@ -138,7 +138,7 @@ class ApplicationRequest(BaseModel):
     user_id: str = Field(min_length=1)
     internship_id: UUID
     status: Literal["applied", "interviewing", "offer", "rejected", "withdrawn"] = "applied"
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class RagReindexRequest(BaseModel):

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ExternalLink, FileCheck, Loader2 } from 'lucide-react';
+import { ExternalLink, FileCheck, Loader2, Save } from 'lucide-react';
 import { apiRequest, type ApplicationRecord } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -18,6 +18,8 @@ export default function Applications() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
+  const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
+  const [savingNotes, setSavingNotes] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchApplications = async () => {
@@ -26,6 +28,7 @@ export default function Applications() {
         setLoading(true);
         const data = await apiRequest<ApplicationRecord[]>(`/api/applications?user_id=${encodeURIComponent(user.id)}`);
         setApplications(data);
+        setDraftNotes(Object.fromEntries(data.map((application) => [application.id, application.notes ?? ''])));
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load applications.');
@@ -38,7 +41,7 @@ export default function Applications() {
   }, [user?.id]);
 
   const updateStatus = async (application: ApplicationRecord, status: ApplicationRecord['status']) => {
-    if (!user?.id || application.status === status) return;
+    if (!user?.id || application.status === status || updating[application.id] || savingNotes[application.id]) return;
     setActionError(null);
     setUpdating((current) => ({ ...current, [application.id]: true }));
 
@@ -49,6 +52,7 @@ export default function Applications() {
           user_id: user.id,
           internship_id: application.internship.id,
           status,
+          notes: application.notes ?? null,
         }),
       });
       setApplications((current) => current.map((item) => (
@@ -60,6 +64,39 @@ export default function Applications() {
       setActionError(err instanceof Error ? err.message : 'Could not update application status.');
     } finally {
       setUpdating((current) => {
+        const next = { ...current };
+        delete next[application.id];
+        return next;
+      });
+    }
+  };
+
+  const saveNotes = async (application: ApplicationRecord) => {
+    if (!user?.id || updating[application.id] || savingNotes[application.id]) return;
+    const notes = (draftNotes[application.id] ?? '').trim();
+    setActionError(null);
+    setSavingNotes((current) => ({ ...current, [application.id]: true }));
+
+    try {
+      const result = await apiRequest<{ status: ApplicationRecord['status']; updated_at: string }>('/api/applications', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: user.id,
+          internship_id: application.internship.id,
+          status: application.status,
+          notes: notes || null,
+        }),
+      });
+      setApplications((current) => current.map((item) => (
+        item.id === application.id
+          ? { ...item, notes: notes || null, updated_at: result.updated_at }
+          : item
+      )));
+      setDraftNotes((current) => ({ ...current, [application.id]: notes }));
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Could not save application notes.');
+    } finally {
+      setSavingNotes((current) => {
         const next = { ...current };
         delete next[application.id];
         return next;
@@ -119,7 +156,7 @@ export default function Applications() {
                   <select
                     value={application.status}
                     onChange={(event) => void updateStatus(application, event.currentTarget.value as ApplicationRecord['status'])}
-                    disabled={updating[application.id]}
+                    disabled={updating[application.id] || savingNotes[application.id]}
                     aria-label={`Application status for ${application.internship.title}`}
                     aria-busy={Boolean(updating[application.id])}
                     className={`max-w-full rounded-full border-0 px-3 py-1 text-xs font-bold capitalize focus:ring-2 focus:ring-indigo-500 disabled:cursor-wait disabled:opacity-60 ${statusStyles[application.status]}`}
@@ -148,6 +185,37 @@ export default function Applications() {
                     </span>
                   )}
                 </div>
+                <details className="col-span-12">
+                  <summary className="cursor-pointer text-sm font-semibold text-indigo-700 hover:text-indigo-600 dark:text-indigo-300 dark:hover:text-indigo-200">
+                    {application.notes ? 'Edit notes' : 'Add notes'}
+                  </summary>
+                  <div className="mt-3 rounded-lg bg-gray-50 p-4 dark:bg-gray-900/60">
+                    <label htmlFor={`notes-${application.id}`} className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Private notes for this application
+                    </label>
+                    <textarea
+                      id={`notes-${application.id}`}
+                      value={draftNotes[application.id] ?? ''}
+                      onChange={(event) => setDraftNotes((current) => ({ ...current, [application.id]: event.currentTarget.value }))}
+                      maxLength={2000}
+                      rows={3}
+                      placeholder="Recruiter contact, interview prep, or follow-up date..."
+                      className="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-4">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{(draftNotes[application.id] ?? '').length}/2000</span>
+                      <button
+                        type="button"
+                        onClick={() => void saveNotes(application)}
+                        disabled={savingNotes[application.id] || updating[application.id] || (draftNotes[application.id] ?? '') === (application.notes ?? '')}
+                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingNotes[application.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {savingNotes[application.id] ? 'Saving…' : 'Save notes'}
+                      </button>
+                    </div>
+                  </div>
+                </details>
               </article>
             ))}
           </div>

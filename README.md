@@ -9,6 +9,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - FastAPI backend with CORS and environment-based configuration.
 - Search and filtering for internships.
 - Optional authenticated semantic search ranked by the existing pgvector internship index.
+- Account-based saved listings and application tracking with editable status and private notes.
 - On-demand internship update endpoint.
 - Retrieval-augmented mentor using LangChain, Gemini embeddings, PostgreSQL/pgvector, and schema-validated Groq output.
 - Scrape-to-search indexing: normalize postings, split them into overlapping chunks, embed only changed chunks, and update pgvector in the same database transaction.
@@ -18,7 +19,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 
 1. [x] Fix integration paths across React, FastAPI, scraper, and docs.
 2. [x] Store normalized internship records in PostgreSQL.
-3. [x] Save internships and track applications.
+3. [x] Save internships and track applications with editable statuses and notes.
 4. [x] Add LangChain chunking, Gemini embeddings, pgvector retrieval, and structured mentor output.
 5. [x] Connect the mentor response and recommendations to the dashboard.
 6. [x] Containerize the backend and define repeatable Cloud Run service, scraper job, and scheduler deployment.
