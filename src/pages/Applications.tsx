@@ -16,6 +16,8 @@ export default function Applications() {
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchApplications = async () => {
@@ -35,6 +37,36 @@ export default function Applications() {
     fetchApplications();
   }, [user?.id]);
 
+  const updateStatus = async (application: ApplicationRecord, status: ApplicationRecord['status']) => {
+    if (!user?.id || application.status === status) return;
+    setActionError(null);
+    setUpdating((current) => ({ ...current, [application.id]: true }));
+
+    try {
+      const result = await apiRequest<{ status: ApplicationRecord['status']; updated_at: string }>('/api/applications', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: user.id,
+          internship_id: application.internship.id,
+          status,
+        }),
+      });
+      setApplications((current) => current.map((item) => (
+        item.id === application.id
+          ? { ...item, status: result.status, updated_at: result.updated_at }
+          : item
+      )));
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Could not update application status.');
+    } finally {
+      setUpdating((current) => {
+        const next = { ...current };
+        delete next[application.id];
+        return next;
+      });
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-950 dark:bg-gray-900 dark:text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -44,9 +76,15 @@ export default function Applications() {
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Applications</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Track applications created from internship cards.</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Update each application as it moves through the hiring process.</p>
           </div>
         </div>
+
+        {actionError && (
+          <div role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+            {actionError}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center gap-2 text-gray-500">
@@ -78,9 +116,20 @@ export default function Applications() {
                 </div>
                 <p className="col-span-6 text-sm font-medium sm:col-span-3">{application.internship.company}</p>
                 <div className="col-span-4 sm:col-span-2">
-                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${statusStyles[application.status]}`}>
-                    {application.status}
-                  </span>
+                  <select
+                    value={application.status}
+                    onChange={(event) => void updateStatus(application, event.currentTarget.value as ApplicationRecord['status'])}
+                    disabled={updating[application.id]}
+                    aria-label={`Application status for ${application.internship.title}`}
+                    aria-busy={Boolean(updating[application.id])}
+                    className={`max-w-full rounded-full border-0 px-3 py-1 text-xs font-bold capitalize focus:ring-2 focus:ring-indigo-500 disabled:cursor-wait disabled:opacity-60 ${statusStyles[application.status]}`}
+                  >
+                    <option value="applied">Applied</option>
+                    <option value="interviewing">Interviewing</option>
+                    <option value="offer">Offer</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="withdrawn">Withdrawn</option>
+                  </select>
                 </div>
                 <div className="col-span-2 text-right">
                   {application.internship.apply_link ? (
