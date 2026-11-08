@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Bookmark, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
-import { apiRequest, internshipSearchPath, type Internship } from '../lib/api';
+import { apiRequest, internshipSearchPath, type ApplicationRecord, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 const InternshipCard = ({
   internship,
@@ -136,6 +136,40 @@ export const InternshipFeed = () => {
       controller.abort();
     };
   }, [searchTerm, location, source, retryCount]);
+
+  useEffect(() => {
+    let active = true;
+    setActionState({});
+    setActionError(null);
+    setPendingActions({});
+
+    if (!user?.id) return () => { active = false; };
+
+    const userId = encodeURIComponent(user.id);
+    void Promise.all([
+      apiRequest<Internship[]>(`/api/saved?user_id=${userId}`),
+      apiRequest<ApplicationRecord[]>(`/api/applications?user_id=${userId}`),
+    ])
+      .then(([savedInternships, applications]) => {
+        if (!active) return;
+        const nextState: Record<string, { saved?: boolean; applied?: boolean }> = {};
+        for (const internship of savedInternships) {
+          nextState[internship.id] = { ...nextState[internship.id], saved: true };
+        }
+        for (const application of applications) {
+          const internshipId = application.internship.id;
+          nextState[internshipId] = { ...nextState[internshipId], applied: true };
+        }
+        setActionState(nextState);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        console.error('Could not load saved internship and application state:', err);
+        setActionError('Could not load your saved and tracked internship status. You can still use the actions below.');
+      });
+
+    return () => { active = false; };
+  }, [user?.id]);
 
   const handleSave = async (internshipId: string) => {
     if (!user?.id) {
