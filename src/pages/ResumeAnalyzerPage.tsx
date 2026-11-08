@@ -1,12 +1,5 @@
-import React from 'react';
-import { ResumeAnalyser } from '../components/ResumeAnalyser';
+import ResumeScannerPage from './ResumeScannerPage';
 
-const ResumeAnalyzerPage: React.FC = () => {
-  return (
-    <div>
-      <ResumeAnalyser />
-    </div>
-  );
-};
+const ResumeAnalyzerPage = () => <ResumeScannerPage />;
 
 export default ResumeAnalyzerPage;

@@ -47,6 +47,16 @@ const PublicRoute = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
+const HomeRoute = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+
+  return isAuthenticated ? <HomePage /> : <Navigate to="/internships" replace />;
+};
+
 const AppRoutes = () => (
   <Routes>
     <Route path="/login" element={
@@ -56,17 +66,9 @@ const AppRoutes = () => (
     } />
 
     {/* Protected Routes */}
-    <Route path="/" element={
-      <ProtectedRoute>
-        <HomePage />
-      </ProtectedRoute>
-    } />
+    <Route path="/" element={<HomeRoute />} />
 
-    <Route path="/internships" element={
-      <ProtectedRoute>
-        <InternshipsPage />
-      </ProtectedRoute>
-    } />
+    <Route path="/internships" element={<InternshipsPage />} />
 
     <Route path="/branding-tips" element={
       <ProtectedRoute>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Bookmark, CalendarDays, CheckCircle2, Clock3, ExternalLink, FileCheck, Loader2, MapPin, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { apiRequest, internshipSearchPath, semanticInternshipSearchPath, type ApplicationRecord, type Internship } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -162,6 +162,7 @@ const InternshipCard = ({
 
 export const InternshipFeed = () => {
   const { user } = useAuth();
+  const currentLocation = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const routeQuery = searchParams.get('q') ?? '';
   const [allInternships, setAllInternships] = useState<Internship[]>([]);
@@ -489,6 +490,15 @@ export const InternshipFeed = () => {
             {actionError && (
               <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
                 <p>{actionError}</p>
+                {!user?.id && (
+                  <Link
+                    to="/login"
+                    state={{ from: currentLocation }}
+                    className="shrink-0 font-semibold underline"
+                  >
+                    Sign in
+                  </Link>
+                )}
                 <button type="button" onClick={() => setActionError(null)} className="font-semibold underline">Dismiss</button>
               </div>
             )}

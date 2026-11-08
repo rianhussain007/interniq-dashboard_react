@@ -7,7 +7,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - Internship aggregation from scraper/API sources.
 - React, TypeScript, Vite, and Tailwind dashboard.
 - FastAPI backend with CORS and environment-based configuration.
-- Keyword and AI search with location/source/work-mode filters, deadline sorting, and closing-soon cues.
+- Public keyword search and authenticated AI search with location/source/work-mode filters, deadline sorting, and closing-soon cues.
 - Optional authenticated semantic search uses pgvector nearest neighbors, then applies recency/deadline sorting within the matched candidate set.
 - Account-based saved listings and application tracking with editable status and private notes.
 - On-demand internship update endpoint.
@@ -15,6 +15,15 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - Retrieval-augmented mentor using LangChain, Gemini embeddings, PostgreSQL/pgvector, and schema-validated Groq output.
 - Scrape-to-search indexing: normalize postings, split them into overlapping chunks, embed only changed chunks, and update pgvector in the same database transaction.
 - Mentor responses include grounded next steps, source references, and validated internship recommendations.
+- Career tools: a local resume builder and PDF content checklist, three resume layouts, role-based interview practice, personalized outreach drafts, and an internship compensation calculator.
+
+The career tools are deliberately usable without model-provider calls: resume drafts stay in browser storage, PDF text is analyzed in the browser, and practice/outreach content is not sent to InternIQ. The compensation calculator uses only figures entered by the student; it does not claim to provide market-rate benchmarks.
+
+## Prototype Readiness
+
+This repository contains an implemented software prototype, not a live production service. The workspace used for the current review has no configured Supabase project, PostgreSQL/pgvector database, Gemini or Groq credentials, or cloud deployment. CI, deterministic backend tests, and a local sample-API browser check provide evidence for the coded flows, but the real scrape-to-index-to-retrieval journey and authenticated student journey still need staging verification.
+
+The current provisional software readiness assessment is **TRL 4 (laboratory prototype)**: critical components have been built and checked locally with deterministic test doubles. This is not a NASA certification. Do not claim TRL 5 or higher until the end-to-end system has been tested in a realistic staging environment; deployment, monitoring, security, and user validation are separate release gates. The estimate and evidence log are in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
 ## Build Roadmap
 
@@ -147,6 +156,19 @@ npm run dev
 ```
 
 The app should be available at `http://localhost:5173` and call the backend through `VITE_API_BASE_URL`.
+
+### Project Checks
+
+Install the backend's development dependencies and run the deterministic backend suite from the project root:
+
+```bash
+python -m pip install -r backend/requirements-dev.txt
+python -m pytest
+```
+
+The tests use fake providers and storage connections where appropriate; they do not require API keys or a live database. CI also runs frontend lint/build, backend syntax checks, and a backend container build.
+
+The older scripts named `backend/test_api*.py` and `backend/scraper/test_api*.py` are manual RapidAPI connectivity probes, not application tests. They may call an external service and require a valid API key; the default pytest suite intentionally does not collect them.
 
 ## API Routes
 

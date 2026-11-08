@@ -7,7 +7,13 @@ const GoogleLoginButton: React.FC<{ onError: (message: string) => void }> = ({ o
   const { loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || '/';
+  const redirectLocation = (location.state as {
+    from?: { pathname?: string; search?: string; hash?: string };
+  } | null)?.from;
+  const redirectPath = redirectLocation?.pathname;
+  const from = redirectPath?.startsWith('/') && !redirectPath.startsWith('//')
+    ? `${redirectPath}${redirectLocation?.search ?? ''}${redirectLocation?.hash ?? ''}`
+    : '/';
 
   const handleSuccess = async (response: CredentialResponse) => {
     try {

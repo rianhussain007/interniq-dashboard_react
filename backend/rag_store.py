@@ -119,7 +119,11 @@ def upsert_knowledge_documents(
         if existing.get((source_id, chunk["chunk_index"]))
         != (chunk["content_hash"], embedder.model)
     ]
-    vectors = embedder.embed_documents([chunk["embedding_text"] for chunk in pending_chunks])
+    vectors = (
+        embedder.embed_documents([chunk["embedding_text"] for chunk in pending_chunks])
+        if pending_chunks
+        else []
+    )
 
     for chunk, vector in zip(pending_chunks, vectors, strict=True):
         with conn.cursor() as cur:
