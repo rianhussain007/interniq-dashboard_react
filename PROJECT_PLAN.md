@@ -33,7 +33,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 
 ### A. Full local and UI verification
 
-- [x] Run final local frontend lint/build, backend tests, and diff checks after the final changes; all pass. GitHub CI remains the post-push gate.
+- [x] Run final local frontend lint/build, backend tests, and diff checks after the final changes; all pass. GitHub CI, including backend tests and container build, passed for commit `c912965` ([run](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42503155730)).
 - [ ] Exercise every career-tool route, responsive layout, print output, invalid PDF cases, and protected-route return paths in a browser.
 - [ ] Add or run automated frontend interaction coverage for the new tools and main student journey.
 - [x] Remove unmounted legacy pages/layouts that duplicated current routes or exposed stale links; document the remaining manual external-API probes.
@@ -75,7 +75,7 @@ Do not raise the rating on the basis of added code, a successful build, or mocke
 
 ## Time estimate and dependencies
 
-- The implementation-only prototype increment described above is complete in this working session; final local checks, commit, push, and CI result remain.
+- The implementation-only prototype increment described above is complete in this working session. Commit `c912965` is pushed to `main`; local checks and GitHub CI passed. Live staging and production remain gated on external services and credentials.
 - A first staging integration pass is estimated at **0.5–1.5 focused days after** valid database, model-provider, auth, and cloud access are available. Provider approval, database provisioning, or source-site changes can extend that calendar time.
 - Production launch time is not responsibly estimable until staging results, product acceptance, monitoring, and operating ownership are known.
 - At the last workspace audit, `.env`, provider credentials, a live PostgreSQL/pgvector instance, and cloud project access were unavailable. No TRL above the local prototype level is supported by evidence yet.
