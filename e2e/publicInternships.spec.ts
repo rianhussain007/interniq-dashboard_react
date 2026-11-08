@@ -24,6 +24,23 @@ test.beforeEach(async ({ page }) => {
     contentType: 'application/json',
     body: JSON.stringify([internship]),
   }));
+  await page.route(/\/api\/internships\/update(?:\?.*)?$/, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      message: 'Live internship listings refreshed.',
+      summary: {
+        status: 'ok',
+        scraped: 2,
+        upserted: 2,
+        skipped: 0,
+        sources: [
+          { source: 'Greenhouse', status: 'ok', count: 2 },
+          { source: 'Jobicy', status: 'empty', count: 0 },
+        ],
+      },
+    }),
+  }));
 });
 
 test('guest home opens public internships and preserves the return path when signing in', async ({ page }) => {
@@ -34,6 +51,11 @@ test('guest home opens public internships and preserves the return path when sig
   await expect(page.getByRole('heading', { name: internship.title })).toBeVisible();
   await expect(page.getByRole('link', { name: `Open application link for ${internship.title}` }))
     .toHaveAttribute('href', internship.apply_link);
+  await page.getByRole('button', { name: 'Refresh live listings' }).click();
+  await expect(page.getByRole('group', { name: 'Live source refresh results' }))
+    .toContainText('2 current roles received · 2 saved or refreshed');
+  await expect(page.getByRole('group', { name: 'Live source refresh results' })).toContainText('Greenhouse');
+  await expect(page.getByRole('group', { name: 'Live source refresh results' })).toContainText('No internships open');
 
   await page.getByRole('button', { name: `Save ${internship.title}` }).click();
   await expect(page.getByRole('alert')).toContainText('Sign in to save internships');

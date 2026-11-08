@@ -11,6 +11,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 - SQLite-backed local email/password accounts, persistent sessions, private profiles, saved listings, applications, and checklist progress.
 - On-demand internship update endpoint.
 - Scraper update responses expose per-source and indexing totals as structured JSON.
+- After a refresh, the internship feed shows each source's result and live role count, including sources that are empty or temporarily unavailable.
 - Retrieval-augmented mentor using LangChain, Gemini embeddings, PostgreSQL/pgvector, and schema-validated Groq output.
 - Scrape-to-search indexing: normalize postings, split them into overlapping chunks, embed only changed chunks, and update pgvector in the same database transaction.
 - Mentor responses include grounded next steps, source references, and validated internship recommendations.
@@ -27,7 +28,7 @@ The six career tools work without an account or model-provider calls: the resume
 
 ## Prototype Readiness
 
-This repository contains a local-first software prototype, not a hosted production service. Local sign-up, sign-in, account data, profiles, saves, applications, and checklist use SQLite without cloud credentials. Live listings depend on network access and configured employer-board slugs; vector search and provider-backed mentor replies require PostgreSQL/pgvector and Gemini/Groq credentials. Cloud deployment and staging have not been provisioned.
+This repository contains a local-first software prototype, not a hosted production service. Local sign-up, sign-in, account data, profiles, saves, applications, and checklist use SQLite without cloud credentials. Live listings need network access; built-in public-board defaults are used unless you override them. A new local database needs a live refresh before it has listings. Vector search and provider-backed mentor replies require PostgreSQL/pgvector and Gemini/Groq credentials. Cloud deployment and staging have not been provisioned.
 
 The current provisional software readiness assessment is **TRL 4 (laboratory prototype)**: critical components have been built and checked locally with deterministic test doubles. This is not a NASA certification. Do not claim TRL 5 or higher until the end-to-end system has been tested in a realistic staging environment; deployment, monitoring, security, and user validation are separate release gates. The estimate and evidence log are in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 

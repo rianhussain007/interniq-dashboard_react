@@ -7,6 +7,22 @@ import { useAuth } from '../contexts/AuthContext';
 const PAGE_SIZE = 24;
 const PAGE_FETCH_SIZE = PAGE_SIZE + 1;
 
+type SourceRefreshResult = { source: string; status: string; count: number };
+type RefreshSummary = {
+  status?: string;
+  scraped?: number;
+  upserted?: number;
+  skipped?: number;
+  sources?: SourceRefreshResult[];
+};
+
+const sourceResultLabel = (result: SourceRefreshResult) => {
+  if (result.status === 'ok' || result.status === 'partial') return `${result.count} roles found`;
+  if (result.status === 'empty') return 'No internships open';
+  if (result.status === 'not_configured') return 'Not configured';
+  return 'Temporarily unavailable';
+};
+
 const getDaysUntilDeadline = (deadline: string) => {
   const [year, month, day] = deadline.split('-').map(Number);
   if (!year || !month || !day) return null;
@@ -195,6 +211,7 @@ export const InternshipFeed = () => {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+  const [refreshSummary, setRefreshSummary] = useState<RefreshSummary | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionState, setActionState] = useState<Record<string, { saved?: boolean; applied?: boolean }>>({});
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
@@ -225,11 +242,14 @@ export const InternshipFeed = () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
     setRefreshMessage(null);
+    setRefreshSummary(null);
     try {
-      const result = await apiRequest<{ message: string }>('/api/internships/update', { method: 'POST' });
+      const result = await apiRequest<{ message: string; summary?: RefreshSummary }>('/api/internships/update', { method: 'POST' });
       setRefreshMessage(result.message);
+      setRefreshSummary(result.summary ?? null);
       setRetryCount((count) => count + 1);
     } catch (refreshError: unknown) {
+      setRefreshSummary(null);
       setRefreshMessage(refreshError instanceof Error ? refreshError.message : 'Could not refresh internship sources.');
     } finally {
       setIsRefreshing(false);
@@ -542,6 +562,22 @@ export const InternshipFeed = () => {
                 <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
                 {isRefreshing ? 'Checking sources…' : 'Refresh live listings'}
               </button>
+              {refreshSummary?.sources && refreshSummary.sources.length > 0 && (
+                <div role="group" className="w-full basis-full rounded-lg bg-slate-50 p-3 dark:bg-gray-900/70" aria-label="Live source refresh results">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    {refreshSummary.scraped ?? 0} current roles received · {refreshSummary.upserted ?? 0} saved or refreshed
+                    {(refreshSummary.skipped ?? 0) > 0 ? ` · ${refreshSummary.skipped} skipped` : ''}
+                  </p>
+                  <ul className="mt-2 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                    {refreshSummary.sources.map((result) => (
+                      <li key={result.source} className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-2 text-slate-600 dark:bg-gray-800 dark:text-slate-300">
+                        <span className="font-semibold">{result.source}</span>
+                        <span>{sourceResultLabel(result)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
             {actionError && (
               <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">

@@ -6,7 +6,7 @@ Assessment date: 2026-11-09. Percentages are scope estimates, not test scores or
 
 | Area | Estimate | Evidence | Remaining gap |
 | --- | ---: | --- | --- |
-| Local-first product scope | 85% | Local SQLite registration/sign-in, account-scoped profile/saved/applications/checklist, resume drafts, community/events, public live-feed adapters, role matching, resume tools, interview practice, networking drafts, offer comparison, branding tips, GitHub profile lookup, dashboard workspace, alert preferences, and optional email delivery are implemented. A prior local source refresh returned 165 public-board postings; the demo account signs in and reaches the dashboard. Sixteen student routes have passed desktop/mobile rendering checks. | Source coverage and freshness are not guaranteed; some tools are intentionally browser-local, and a first-run database stays empty until a live refresh. OCR, password recovery, user acceptance, and production-grade account operations remain out of scope for this local prototype. |
+| Local-first product scope | 85% | Local SQLite registration/sign-in, account-scoped profile/saved/applications/checklist, resume drafts, community/events, public live-feed adapters, role matching, resume tools, interview practice, networking drafts, offer comparison, branding tips, GitHub profile lookup, dashboard workspace, alert preferences, and optional email delivery are implemented. A live refresh during this assessment returned 165 current postings (101 Greenhouse, 50 Lever, 14 Ashby); Jobicy responded with no matching roles. The demo account signs in and reaches the dashboard. Sixteen student routes have passed desktop/mobile rendering checks. | Source coverage and freshness are not guaranteed; some tools are intentionally browser-local, and a first-run database stays empty until a live refresh. OCR, password recovery, user acceptance, and production-grade account operations remain out of scope for this local prototype. |
 | Agentic / retrieval prototype | 70% | Chunking, embedding/index interfaces, PostgreSQL/pgvector retrieval, and structured mentor output are implemented. SQLite role matching works offline with explainable term/profile overlap. | No configured PostgreSQL, Gemini, or Groq credentials; a live scrape → embed → vector retrieve → grounded mentor journey has not been demonstrated in this workspace. |
 | Production readiness | 25% | Local CI commands and end-to-end checks cover the main auth and browsing journeys; deployment definitions exist for a future hosted environment. | No staging deployment, production secrets, monitoring/alerts, recovery exercise, accessibility review, or user acceptance results. |
 
@@ -37,6 +37,7 @@ These estimates track implemented scope separately from operating evidence. The 
 - [x] Guide new students from an incomplete profile to add skills, set a target role, view ranked matches, and enable alerts.
 - [x] Keep the floating help control clear of the dashboard onboarding action and fit the GitHub tracker search row on a 375px viewport.
 - [x] Remove invented internship seeding; test fixtures are isolated to backend tests, and the product feed uses fetched public postings only.
+- [x] Show source-by-source counts and states after a live refresh so students can tell which boards returned roles and which had no matches.
 - [x] Check the main routes for resume tools, interview practice, networking, salary comparison, profile, saved items, applications, community/events, branding, and GitHub lookup.
 - [x] Review screenshots for all 16 student routes at desktop and mobile sizes; the automated sweep reports no horizontal overflow or uncaught browser errors.
 - [x] Verify the A4 resume print output is one page for a sample draft, excludes editor controls, and can be read by the browser-local scanner. Exercise unsupported file type, oversized PDF, and malformed-PDF error paths.
@@ -47,7 +48,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 
 ### A. Full local and UI verification
 
-- [x] Local frontend lint, strict typecheck, production build, 18 frontend interaction tests, six Chromium end-to-end tests, and 63 backend tests pass in the current workspace.
+- [x] Local frontend lint, strict typecheck, production build, 19 frontend interaction tests, six Chromium end-to-end tests, and 63 backend tests pass in the current workspace.
 - [x] Exercise public feed, local registration/session restore/sign-in/profile save, mobile layout, and guest access to the browser-local career tools in Chromium.
 - [x] Sign in to the local demo account and verify the authenticated dashboard renders.
 - [x] Visually review every career-tool route and responsive layouts beyond the internship feed.
@@ -57,7 +58,7 @@ The browser-side resume, interview, networking, and compensation tools make no A
 - [x] Add automated frontend coverage for the mentor interaction flow, including the structured response and source rendering.
 - [x] Remove unmounted legacy pages/layouts that duplicated current routes or exposed stale links; document the remaining manual external-API probes.
 
-**Exit evidence:** local lint/type/build, 18 frontend interaction tests, 63 backend tests, six Chromium journeys, a 16-route responsive sweep, and a print-to-scan browser walkthrough pass. This establishes a repeatable local prototype walkthrough; staged provider-backed retrieval and product acceptance remain separate gates.
+**Exit evidence:** local lint/type/build, 19 frontend interaction tests, 63 backend tests, six Chromium journeys, a 16-route responsive sweep, a source-refresh walkthrough, and a print-to-scan browser walkthrough pass. This establishes a repeatable local prototype walkthrough; staged provider-backed retrieval and product acceptance remain separate gates.
 
 ### B. Staging integration
 

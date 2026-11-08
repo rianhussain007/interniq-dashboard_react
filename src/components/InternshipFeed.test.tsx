@@ -134,4 +134,36 @@ describe('InternshipFeed', () => {
       );
     });
   });
+
+  it('shows which live sources returned internships after a refresh', async () => {
+    const user = userEvent.setup();
+    mockApiRequest.mockImplementation((path) => {
+      if (path === '/api/internships/update') {
+        return Promise.resolve({
+          message: 'Live internship listings refreshed.',
+          summary: {
+            status: 'ok',
+            scraped: 2,
+            upserted: 2,
+            skipped: 0,
+            sources: [
+              { source: 'Greenhouse', status: 'ok', count: 2 },
+              { source: 'Jobicy', status: 'empty', count: 0 },
+            ],
+          },
+        }) as never;
+      }
+      if (path.startsWith('/api/internships/')) return Promise.resolve([internship]) as never;
+      return Promise.resolve([]) as never;
+    });
+    renderFeed();
+
+    await user.click(await screen.findByRole('button', { name: 'Refresh live listings' }));
+
+    const sourceResults = await screen.findByRole('group', { name: 'Live source refresh results' });
+    expect(screen.getByText(/2 current roles received · 2 saved or refreshed/)).toBeTruthy();
+    expect(sourceResults.textContent).toContain('Greenhouse');
+    expect(sourceResults.textContent).toContain('2 roles found');
+    expect(sourceResults.textContent).toContain('No internships open');
+  });
 });
