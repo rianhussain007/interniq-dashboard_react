@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import GoogleLoginButton from '../components/GoogleLoginButton';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
-// Google OAuth Client ID
-const GOOGLE_CLIENT_ID = '488295745357-49q4gnee0inkr68bris3p0defuhoojv0.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 // Wrap the component with GoogleOAuthProvider
 const LoginPageContent: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const { login, signUp, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
@@ -29,6 +30,7 @@ const LoginPageContent: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setIsLoading(true);
     
     if (!email || !password) {
@@ -38,9 +40,15 @@ const LoginPageContent: React.FC = () => {
     }
 
     try {
-      const result = await login(email, password);
+      const result = isSignUp
+        ? await signUp(email, password)
+        : await login(email, password);
       if (!result.success) {
-        setError(result.error || 'Login failed. Please try again.');
+        setError(result.error || (isSignUp ? 'Could not create your account.' : 'Login failed. Please try again.'));
+      } else if (result.requiresConfirmation) {
+        setNotice('Check your email for the confirmation link, then sign in here.');
+        setIsSignUp(false);
+        setPassword('');
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -55,13 +63,19 @@ const LoginPageContent: React.FC = () => {
       <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
         <div className="p-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">Welcome back</h1>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Sign in to your account to continue</p>
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">{isSignUp ? 'Create your account' : 'Welcome back'}</h1>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{isSignUp ? 'Save roles and build your internship plan' : 'Sign in to continue to your dashboard'}</p>
           </div>
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-md">
               {error}
+            </div>
+          )}
+
+          {notice && (
+            <div className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200">
+              {notice}
             </div>
           )}
 
@@ -89,9 +103,7 @@ const LoginPageContent: React.FC = () => {
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Password
                 </label>
-                <Link to="/forgot-password" className="text-xs text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-                  Forgot password?
-                </Link>
+                {isSignUp && <span className="text-xs text-gray-500">Use at least 8 characters.</span>}
               </div>
               <input
                 type="password"
@@ -101,7 +113,8 @@ const LoginPageContent: React.FC = () => {
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
                 placeholder="••••••••"
                 required
-                autoComplete="current-password"
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                minLength={isSignUp ? 8 : undefined}
                 disabled={isLoading}
               />
             </div>
@@ -117,7 +130,7 @@ const LoginPageContent: React.FC = () => {
                     <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
                     Signing in...
                   </>
-                ) : 'Sign in'}
+                ) : isSignUp ? 'Create account' : 'Sign in'}
               </button>
             </div>
           </form>
@@ -131,19 +144,19 @@ const LoginPageContent: React.FC = () => {
 
           {/* Google Sign-In Button */}
           <div className="mt-4">
-            <GoogleLoginButton />
+            <GoogleLoginButton onError={setError} />
           </div>
           
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Don't have an account?{' '}
-              <Link 
-                to="/signup" 
-                state={{ from: location.state?.from }}
-                className="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
+              {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+              <button
+                type="button"
+                onClick={() => { setIsSignUp((current) => !current); setError(null); setNotice(null); }}
+                className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
               >
-                Sign up
-              </Link>
+                {isSignUp ? 'Sign in' : 'Sign up'}
+              </button>
             </p>
           </div>
         </div>
@@ -154,11 +167,15 @@ const LoginPageContent: React.FC = () => {
 
 // Wrap the component with GoogleOAuthProvider
 const LoginPage: React.FC = () => {
-  return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <LoginPageContent />
-    </GoogleOAuthProvider>
+  const loginPage = (
+    <LoginPageContent />
   );
+
+  return GOOGLE_CLIENT_ID ? (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      {loginPage}
+    </GoogleOAuthProvider>
+  ) : loginPage;
 };
 
 export default LoginPage;

@@ -1,52 +1,34 @@
 import React from 'react';
-import { GoogleLogin } from '@react-oauth/google';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-type GoogleResponse = {
-  credential?: string;
-  clientId?: string;
-  select_by?: string;
-  profileObj?: {
-    googleId: string;
-    name: string;
-    email: string;
-    imageUrl: string;
-  };
-};
-
-const GoogleLoginButton: React.FC = () => {
+const GoogleLoginButton: React.FC<{ onError: (message: string) => void }> = ({ onError }) => {
   const { loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname || '/';
 
-  const handleSuccess = async (response: GoogleResponse) => {
+  const handleSuccess = async (response: CredentialResponse) => {
     try {
-      if (response.profileObj) {
-        const result = await loginWithGoogle({
-          profileObj: {
-            googleId: response.profileObj.googleId,
-            name: response.profileObj.name,
-            email: response.profileObj.email,
-            imageUrl: response.profileObj.imageUrl,
-          },
-          tokenId: response.credential || '',
-          accessToken: response.credential || '',
-        });
-        
-        if (result.success) {
-          navigate('/');
-        } else {
-          console.error('Google login failed:', result.error);
-        }
+      const result = await loginWithGoogle(response.credential || '');
+      if (result.success) {
+        navigate(from, { replace: true });
+      } else {
+        onError(result.error || 'Google sign-in failed. Please try again.');
       }
     } catch (error) {
-      console.error('Error handling Google login:', error);
+      onError(error instanceof Error ? error.message : 'Google sign-in failed. Please try again.');
     }
   };
 
   const handleError = () => {
-    console.error('Google login failed');
+    onError('Google sign-in failed. Please try again.');
   };
+
+  if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
+    return <p className="text-center text-xs text-gray-500">Google sign-in is not configured.</p>;
+  }
 
   return (
     <div className="mt-4">
@@ -63,7 +45,7 @@ const GoogleLoginButton: React.FC = () => {
 
       <div className="mt-6">
         <GoogleLogin
-          onSuccess={(response) => handleSuccess(response as unknown as GoogleResponse)}
+          onSuccess={handleSuccess}
           onError={handleError}
           useOneTap
           auto_select

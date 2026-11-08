@@ -15,6 +15,7 @@ import {
   Target,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { apiRequest } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
 type StatCard = {
@@ -130,12 +131,13 @@ export const Hero = () => {
     setIsMentorTyping(true);
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-      const response = await fetch(`${apiBaseUrl}/api/mentor-chat`, {
+      const data = await apiRequest<{
+        answer?: string;
+        sources?: { title: string; source_id: string; source_type: string; similarity: number }[];
+        next_steps?: string[];
+        suggested_internships?: MentorMessage['suggestedInternships'];
+      }>('/api/mentor-chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           message: trimmedInput,
           user_id: user?.id,
@@ -152,18 +154,6 @@ export const Hero = () => {
           })),
         }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Mentor service is unavailable.' }));
-        throw new Error(errorData.detail || 'Mentor service is unavailable.');
-      }
-
-      const data = await response.json() as {
-        answer?: string;
-        sources?: { title: string; source_id: string; source_type: string; similarity: number }[];
-        next_steps?: string[];
-        suggested_internships?: MentorMessage['suggestedInternships'];
-      };
       setMessages((current) => [
         ...current,
         {

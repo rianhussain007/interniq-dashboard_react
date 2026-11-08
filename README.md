@@ -20,10 +20,9 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 3. [x] Save internships and track applications.
 4. [x] Add LangChain chunking, Gemini embeddings, pgvector retrieval, and structured mentor output.
 5. [x] Connect the mentor response and recommendations to the dashboard.
-6. [ ] Replace demo authentication and authorize private API data on the backend.
-7. [ ] Dockerize and deploy the backend to Cloud Run.
-8. [ ] Deploy the frontend to Firebase Hosting or Cloud Storage + Cloud CDN.
-9. [ ] Schedule scraper jobs with Cloud Scheduler and Cloud Run Jobs.
+6. [ ] Dockerize and deploy the backend to Cloud Run.
+7. [ ] Deploy the frontend to Firebase Hosting or Cloud Storage + Cloud CDN.
+8. [ ] Schedule scraper jobs with Cloud Scheduler and Cloud Run Jobs.
 
 ## Tech Stack
 
@@ -37,7 +36,7 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 
 ### Prerequisites
 
-- Node.js 18 or later.
+- Node.js 22 or later.
 - Python 3.10 or later.
 - pip.
 
@@ -53,9 +52,15 @@ For local development, these defaults are expected:
 
 ```env
 VITE_API_BASE_URL="http://127.0.0.1:8000"
+VITE_SUPABASE_URL="https://your-project-ref.supabase.co"
+VITE_SUPABASE_ANON_KEY="your-supabase-publishable-or-anon-key"
+VITE_GOOGLE_CLIENT_ID="your-google-oauth-client-id"
 ALLOWED_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interniq"
 DB_CONNECT_TIMEOUT_SECONDS="10"
+SUPABASE_URL="https://your-project-ref.supabase.co"
+SUPABASE_ANON_KEY="your-supabase-publishable-or-anon-key"
+INTERNIQ_ADMIN_TOKEN="generate-a-long-random-token"
 GROQ_API_KEY="your-groq-api-key"
 GROQ_MODEL="openai/gpt-oss-20b"
 GEMINI_API_KEY="your-gemini-api-key"
@@ -67,6 +72,8 @@ RAG_CHUNK_OVERLAP="120"
 ```
 
 The frontend only reads `VITE_*` variables. Backend-only secrets such as `GROQ_API_KEY` must not be exposed through `VITE_*` variables.
+
+Email/password and Google sign-in use Supabase Auth. Enable the email provider and, if needed, Google in the Supabase dashboard. The Google client ID must match the configured Google provider. The backend uses `SUPABASE_URL` and `SUPABASE_ANON_KEY` to verify bearer tokens; use the same project URL and public anon/publishable key as the frontend. Set `INTERNIQ_ADMIN_TOKEN` to a long random value for scraper and full-reindex endpoints.
 
 ### Backend
 
@@ -95,7 +102,7 @@ python init_db.py
 The scraper automatically refreshes the RAG index after upserting postings. To build or refresh it manually after changing the embedding model or chunk settings:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/rag/reindex -H "Content-Type: application/json" -d "{}"
+curl -X POST http://127.0.0.1:8000/api/rag/reindex -H "Content-Type: application/json" -H "X-InternIQ-Admin-Token: <INTERNIQ_ADMIN_TOKEN>" -d "{}"
 ```
 
 ### Scraper
@@ -109,7 +116,7 @@ python scraper/update_internships.py
 The backend update endpoint runs the same scraper:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/internships/update
+curl -X POST http://127.0.0.1:8000/api/internships/update -H "X-InternIQ-Admin-Token: <INTERNIQ_ADMIN_TOKEN>"
 ```
 
 ### Frontend
@@ -137,6 +144,8 @@ Current routes:
 - `POST /api/applications`
 - `POST /api/mentor-chat`
 - `POST /api/rag/reindex`
+
+Saved internships, applications, and mentor chat require a valid Supabase bearer token. The backend verifies the token with Supabase and binds private records to that verified user ID. Scraping and full reindex require the admin header.
 
 ## RAG Assistant
 
@@ -178,6 +187,9 @@ Use Cloud Run with a containerized FastAPI service. Runtime configuration should
 ALLOWED_ORIGINS="https://your-firebase-project.web.app"
 GROQ_API_KEY="secret-manager-value"
 GROQ_MODEL="openai/gpt-oss-20b"
+SUPABASE_URL="https://your-project-ref.supabase.co"
+SUPABASE_ANON_KEY="secret-manager-value"
+INTERNIQ_ADMIN_TOKEN="secret-manager-value"
 ```
 
 ```env
@@ -202,4 +214,4 @@ Use Cloud Scheduler to trigger a Cloud Run Job that runs the scraper on a fixed 
 
 The local scrape → chunk → embed → retrieve → structured response workflow is implemented. Containerization, hosted deployment, and scheduled scraper operations remain next steps.
 
-Email/password login currently uses a local demo session, and private API routes accept a client-supplied `user_id`. Add verified authentication and backend authorization before exposing saved internships or application history to public users.
+Supabase Auth provides the email/password and Google sessions. Private API routes verify the bearer token and enforce the authenticated user ID; database row-level security policies are restored when the schema runs on Supabase.

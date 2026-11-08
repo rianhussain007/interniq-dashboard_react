@@ -20,10 +20,10 @@ python scraper/update_internships.py
 
 After the scraper upserts postings, it automatically chunks and indexes internship and career-guidance content with LangChain and Gemini embeddings. `/api/rag/reindex` remains available for an explicit full reindex after changing embedding models or chunk settings.
 
-The FastAPI backend exposes the same update flow:
+The FastAPI backend exposes the same update flow and requires `INTERNIQ_ADMIN_TOKEN`:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/internships/update
+curl -X POST http://127.0.0.1:8000/api/internships/update -H "X-InternIQ-Admin-Token: <INTERNIQ_ADMIN_TOKEN>"
 ```
 
 ## Internship Schema
@@ -45,7 +45,7 @@ Deduplication uses `apply_link` when available, with `title + company + source` 
 
 ## GCP Automation Target
 
-In production, the scraper should run as a Cloud Run Job triggered by Cloud Scheduler. Secrets and database credentials should come from Secret Manager and Cloud Run environment variables. Set `GEMINI_API_KEY` for indexing and `GROQ_API_KEY` for structured mentor responses.
+In production, the scraper should run as a Cloud Run Job triggered by Cloud Scheduler. Secrets and database credentials should come from Secret Manager and Cloud Run environment variables. Set `GEMINI_API_KEY` for indexing, `GROQ_API_KEY` for structured mentor responses, and `INTERNIQ_ADMIN_TOKEN` for protected API-triggered jobs.
 
 ## Notes
 

@@ -6,7 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
@@ -16,6 +16,7 @@ from psycopg.errors import UndefinedTable
 from psycopg.errors import UniqueViolation
 from pydantic import BaseModel, Field
 
+from auth import authenticated_user_id, require_admin_token, require_authenticated_user
 from db import get_db_connection
 from embeddings import GeminiEmbeddingClient
 from internships_store import (
@@ -191,7 +192,10 @@ def suggested_internships_from_docs(
 
 
 @app.post("/api/mentor-chat", response_model=MentorChatResponse)
-def mentor_chat(payload: MentorChatRequest) -> MentorChatResponse:
+def mentor_chat(
+    payload: MentorChatRequest,
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+) -> MentorChatResponse:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="GROQ_API_KEY is not configured on the backend.")
@@ -199,16 +203,17 @@ def mentor_chat(payload: MentorChatRequest) -> MentorChatResponse:
     user_message = payload.message.strip()
     if not user_message:
         raise HTTPException(status_code=400, detail="Message is required.")
+    user_id = authenticated_user_id(current_user, payload.user_id)
 
     try:
         embedder = GeminiEmbeddingClient()
         with get_db_connection() as conn:
-            index_user_context(conn, embedder, payload.user_id, payload.user_profile)
+            index_user_context(conn, embedder, user_id, payload.user_profile)
             retrieved_docs = retrieve_context(
                 conn,
                 embedder,
                 user_message,
-                user_id=payload.user_id,
+                user_id=user_id,
                 top_k=max(1, min(int(os.getenv("RAG_TOP_K", "6")), 12)),
             )
     except Exception as exc:
@@ -281,7 +286,10 @@ def mentor_chat(payload: MentorChatRequest) -> MentorChatResponse:
 
 
 @app.post("/api/rag/reindex")
-def rag_reindex_route(payload: RagReindexRequest):
+def rag_reindex_route(
+    payload: RagReindexRequest,
+    _admin_token: None = Depends(require_admin_token),
+):
     try:
         with get_db_connection() as conn:
             return reindex_rag(conn, payload.user_id, payload.user_profile)
@@ -322,7 +330,7 @@ def search_internships_route(
         raise db_http_error(exc) from exc
 
 @app.post("/api/internships/update")
-def update_internships():
+def update_internships(_admin_token: None = Depends(require_admin_token)):
     try:
         result = subprocess.run(
             [sys.executable, SCRAPER_SCRIPT],
@@ -353,16 +361,24 @@ def update_internships():
 
 
 @app.post("/api/saved")
-def save_internship_route(payload: SaveInternshipRequest):
+def save_internship_route(
+    payload: SaveInternshipRequest,
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    user_id = authenticated_user_id(current_user, payload.user_id)
     try:
         with get_db_connection() as conn:
-            return save_internship(conn, payload.user_id, payload.internship_id)
+            return save_internship(conn, user_id, payload.internship_id)
     except Exception as exc:
         raise db_http_error(exc) from exc
 
 
 @app.get("/api/saved")
-def list_saved_internships_route(user_id: str = Query(min_length=1)):
+def list_saved_internships_route(
+    user_id: str = Query(min_length=1),
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    user_id = authenticated_user_id(current_user, user_id)
     try:
         with get_db_connection() as conn:
             return list_saved_internships(conn, user_id)
@@ -371,12 +387,16 @@ def list_saved_internships_route(user_id: str = Query(min_length=1)):
 
 
 @app.post("/api/applications")
-def track_application_route(payload: ApplicationRequest):
+def track_application_route(
+    payload: ApplicationRequest,
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    user_id = authenticated_user_id(current_user, payload.user_id)
     try:
         with get_db_connection() as conn:
             return track_application(
                 conn,
-                payload.user_id,
+                user_id,
                 payload.internship_id,
                 payload.status,
                 payload.notes,
@@ -386,7 +406,11 @@ def track_application_route(payload: ApplicationRequest):
 
 
 @app.get("/api/applications")
-def list_applications_route(user_id: str = Query(min_length=1)):
+def list_applications_route(
+    user_id: str = Query(min_length=1),
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    user_id = authenticated_user_id(current_user, user_id)
     try:
         with get_db_connection() as conn:
             return list_applications(conn, user_id)

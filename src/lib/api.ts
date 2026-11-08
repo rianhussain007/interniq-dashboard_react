@@ -1,3 +1,5 @@
+import { isSupabaseConfigured, supabase } from './supabase';
+
 export type Internship = {
   id: string;
   title: string;
@@ -25,10 +27,14 @@ export type ApplicationRecord = {
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const session = isSupabaseConfigured
+    ? (await supabase.auth.getSession()).data.session
+    : null;
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
     headers: {
       Accept: 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
       ...options?.headers,
     },

@@ -93,12 +93,22 @@ create table if not exists public.saved_internships (
   unique(user_id, internship_id)
 );
 
-alter table public.saved_internships disable row level security;
 drop policy if exists "Users can manage their own saved internships" on public.saved_internships;
+drop policy if exists "Users can read and manage their own saved internships" on public.saved_internships;
 alter table public.saved_internships drop constraint if exists saved_internships_user_id_fkey;
 alter table public.saved_internships alter column user_id type text using user_id::text;
 alter table public.saved_internships add column if not exists saved_at timestamp with time zone default now();
 alter table public.saved_internships alter column saved_at set not null;
+
+do $$
+begin
+  if to_regprocedure('auth.uid()') is not null then
+    execute 'alter table public.saved_internships enable row level security';
+    execute 'create policy "Users can read and manage their own saved internships" on public.saved_internships for all to authenticated using (auth.uid()::text = user_id) with check (auth.uid()::text = user_id)';
+  else
+    execute 'alter table public.saved_internships disable row level security';
+  end if;
+end $$;
 
 create index if not exists saved_internships_user_id_idx
   on public.saved_internships (user_id, saved_at desc);
@@ -123,14 +133,24 @@ create table if not exists public.applications (
   unique(user_id, internship_id)
 );
 
-alter table public.applications disable row level security;
 drop policy if exists "Users can manage their own applications" on public.applications;
+drop policy if exists "Users can read and manage their own applications" on public.applications;
 alter table public.applications drop constraint if exists applications_user_id_fkey;
 alter table public.applications alter column user_id type text using user_id::text;
 alter table public.applications add column if not exists updated_at timestamp with time zone default now();
 update public.applications set updated_at = coalesce(updated_at, applied_at, now()) where updated_at is null;
 alter table public.applications alter column updated_at set default now();
 alter table public.applications alter column updated_at set not null;
+
+do $$
+begin
+  if to_regprocedure('auth.uid()') is not null then
+    execute 'alter table public.applications enable row level security';
+    execute 'create policy "Users can read and manage their own applications" on public.applications for all to authenticated using (auth.uid()::text = user_id) with check (auth.uid()::text = user_id)';
+  else
+    execute 'alter table public.applications disable row level security';
+  end if;
+end $$;
 
 create index if not exists applications_user_id_idx
   on public.applications (user_id, updated_at desc);
