@@ -1,4 +1,5 @@
-import { isSupabaseConfigured, supabase } from './supabase';
+import { authMode, isSupabaseConfigured, supabase } from './supabase';
+import { getLocalAccessToken } from './authSession';
 
 export type Internship = {
   id: string;
@@ -15,6 +16,9 @@ export type Internship = {
   deadline?: string | null;
   description?: string;
   similarity?: number;
+  score?: number;
+  matched_terms?: string[];
+  matched_skills?: string[];
 };
 
 export type ApplicationRecord = {
@@ -29,14 +33,17 @@ export type ApplicationRecord = {
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const session = isSupabaseConfigured
+  const accessToken = authMode !== 'supabase'
+    ? getLocalAccessToken()
+    : isSupabaseConfigured
     ? (await supabase.auth.getSession()).data.session
+      ?.access_token
     : null;
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
     headers: {
       Accept: 'application/json',
-      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
       ...options?.headers,
     },

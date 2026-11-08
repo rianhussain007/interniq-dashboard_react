@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navbar } from './components/Navbar';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import GuideBot from './components/GuideBot';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const InternshipsPage = lazy(() => import('./pages/InternshipsPage'));
@@ -18,6 +19,7 @@ const ResumeTemplatesPage = lazy(() => import('./pages/ResumeTemplatesPage'));
 const InterviewPrepPage = lazy(() => import('./pages/InterviewPrepPage'));
 const NetworkingPage = lazy(() => import('./pages/NetworkingPage'));
 const SalaryGuidePage = lazy(() => import('./pages/SalaryGuidePage'));
+const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 
 // ProtectedRoute component to guard authenticated routes
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -38,7 +40,11 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
 
 // Public route that redirects to dashboard if user is already logged in
 const PublicRoute = ({ children }: { children: JSX.Element }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="flex min-h-[50vh] items-center justify-center text-sm text-gray-500" role="status">Loading…</div>;
+  }
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -106,43 +112,14 @@ const AppRoutes = () => (
       </ProtectedRoute>
     } />
 
-    {/* Resume Tools Routes */}
-    <Route path="/resume-builder" element={
-      <ProtectedRoute>
-        <ResumeBuilderPage />
-      </ProtectedRoute>
-    } />
-
-    <Route path="/resume-scanner" element={
-      <ProtectedRoute>
-        <ResumeScannerPage />
-      </ProtectedRoute>
-    } />
-
-    <Route path="/resume-templates" element={
-      <ProtectedRoute>
-        <ResumeTemplatesPage />
-      </ProtectedRoute>
-    } />
-
-    {/* Career Tips Routes */}
-    <Route path="/interview-prep" element={
-      <ProtectedRoute>
-        <InterviewPrepPage />
-      </ProtectedRoute>
-    } />
-
-    <Route path="/networking" element={
-      <ProtectedRoute>
-        <NetworkingPage />
-      </ProtectedRoute>
-    } />
-
-    <Route path="/salary-guide" element={
-      <ProtectedRoute>
-        <SalaryGuidePage />
-      </ProtectedRoute>
-    } />
+    {/* Browser-local career tools are available without an account. */}
+    <Route path="/resume-builder" element={<ResumeBuilderPage />} />
+    <Route path="/resume-scanner" element={<ResumeScannerPage />} />
+    <Route path="/resume-templates" element={<ResumeTemplatesPage />} />
+    <Route path="/interview-prep" element={<InterviewPrepPage />} />
+    <Route path="/networking" element={<NetworkingPage />} />
+    <Route path="/salary-guide" element={<SalaryGuidePage />} />
+    <Route path="/community" element={<ProtectedRoute><CommunityPage /></ProtectedRoute>} />
 
     {/* Fallback route */}
     <Route path="*" element={<Navigate to="/" replace />} />
@@ -166,6 +143,7 @@ function App() {
               <AppRoutes />
             </Suspense>
           </main>
+          <GuideBot />
         </div>
       </AuthProvider>
     </Router>

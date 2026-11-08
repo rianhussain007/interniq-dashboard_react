@@ -13,8 +13,8 @@ export const CareerToolLayout = ({ eyebrow, title, description, children }: Care
   <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-4 py-8 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:px-6 lg:px-8">
     <div className="mx-auto max-w-6xl">
       <div className="mb-7">
-        <Link to="/" className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-300">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to dashboard
+        <Link to="/internships" className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-300">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to internships
         </Link>
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300">{eyebrow}</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>

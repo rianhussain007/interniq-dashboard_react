@@ -9,7 +9,7 @@ const internship = {
   stipend: '₹25,000/month',
   skills: ['React', 'TypeScript'],
   apply_link: 'https://jobs.example.test/frontend-intern',
-  source: 'LinkedIn',
+  source: 'Greenhouse',
   description: 'Build accessible product experiences with the frontend team.',
 };
 
@@ -27,7 +27,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('guest home opens public internships and preserves the return path when signing in', async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.goto('/', { waitUntil: 'commit' });
 
   await expect(page).toHaveURL(/\/internships$/);
   await expect(page.getByRole('heading', { name: 'Find Your Next Internship' })).toBeVisible();
@@ -56,41 +56,67 @@ test('internship feed remains usable on a narrow mobile viewport', async ({ page
   expect(hasHorizontalOverflow).toBe(false);
 });
 
-test('an authenticated student can open the protected resume builder and edit a draft', async ({ page }) => {
-  await page.addInitScript(() => {
-    const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
-      .replace(/=/g, '')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_');
-    const expiresAt = Math.floor(Date.now() / 1000) + 3_600;
-    const user = {
-      id: 'e2e-student-1',
-      aud: 'authenticated',
-      role: 'authenticated',
-      email: 'student@example.test',
-      app_metadata: { provider: 'email', providers: ['email'] },
-      user_metadata: { full_name: 'Jordan Lee' },
-      created_at: new Date().toISOString(),
-    };
-    const accessToken = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({
-      aud: 'authenticated',
-      exp: expiresAt,
-      sub: user.id,
-      role: 'authenticated',
-    })}.test-signature`;
+test('guests can open the browser-local career tools without signing in', async ({ page }) => {
+  const tools = [
+    ['/resume-builder', 'Resume builder'],
+    ['/resume-scanner', 'Resume scanner'],
+    ['/resume-templates', 'Resume templates'],
+    ['/interview-prep', 'Interview preparation'],
+    ['/networking', 'Networking message studio'],
+    ['/salary-guide', 'Compensation comparison'],
+  ] as const;
 
-    localStorage.setItem('sb-e2e-project-auth-token', JSON.stringify({
-      access_token: accessToken,
-      refresh_token: 'e2e-refresh-token',
-      token_type: 'bearer',
-      expires_in: 3_600,
-      expires_at: expiresAt,
-      user,
-    }));
-  });
+  for (const [path, title] of tools) {
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to internships' })).toHaveAttribute('href', '/internships');
+  }
 
   await page.goto('/resume-builder', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Your details' })).toBeVisible();
   await page.getByLabel('Full name').fill('Jordan Lee');
   await expect(page.getByRole('heading', { name: 'Jordan Lee' })).toBeVisible();
+});
+
+test('local email accounts can register, restore, sign in, and persist a career profile', async ({ page }) => {
+  const email = `student-${Date.now()}@example.test`;
+  const password = 'InternIQ-e2e-password-2026';
+
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Sign up' }).click();
+  await page.getByLabel('Full name').fill('Jordan Demo Student');
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Create account' }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('button', { name: 'Jordan Demo Student' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Jordan Demo Student' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Jordan Demo Student' }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password').fill('wrong-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('alert')).toContainText('Email or password is incorrect');
+
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  await page.goto('/profile-setup', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Career profile' })).toBeVisible();
+  await page.getByLabel('Target internship role').fill('Data analyst intern');
+  await page.getByLabel('Preferred location').fill('Bengaluru');
+  await page.getByLabel('Skills').fill('Python, SQL');
+  await page.getByRole('button', { name: 'Save profile' }).click();
+  await expect(page.getByRole('status')).toContainText('Profile saved');
+
+  await page.reload();
+  await expect(page.getByLabel('Target internship role')).toHaveValue('Data analyst intern');
+  await expect(page.getByLabel('Skills')).toHaveValue('Python, SQL');
 });

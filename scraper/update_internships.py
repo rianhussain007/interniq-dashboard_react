@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-Run all internship scrapers and upsert normalized results into PostgreSQL.
-"""
+"""Refresh live internship postings from public job-board APIs."""
+
+from __future__ import annotations
 
 import json
 import os
@@ -12,58 +12,16 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
-sys.path.append(PROJECT_ROOT)
-sys.path.append(BACKEND_DIR)
+sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, BACKEND_DIR)
 
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
-from db import get_db_connection
+from db import get_db_connection, is_sqlite_backend
 from internships_store import upsert_internships
+from local_store import upsert_internship as upsert_local_internship
 from rag_store import reindex_rag
-from scraper.scrapers.internshala_scraper import InternshalaScraper
-from scraper.scrapers.linkedin_scraper import LinkedInScraper
-from scraper.scrapers.naukri_scraper import NaukriScraper
-
-
-ENABLED_SCRAPERS = [
-    InternshalaScraper(),
-    LinkedInScraper(),
-    NaukriScraper(),
-]
-
-
-def scrape_all() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    all_items: list[dict[str, Any]] = []
-    source_results: list[dict[str, Any]] = []
-    for scraper in ENABLED_SCRAPERS:
-        try:
-            scraped_items = scraper.scrape()
-            if not isinstance(scraped_items, list) or any(
-                not isinstance(item, dict) for item in scraped_items
-            ):
-                raise TypeError("scraper must return a list of internship records")
-
-            all_items.extend(scraped_items)
-            status = "ok" if scraped_items else "empty"
-            source_results.append(
-                {
-                    "source": scraper.site_name,
-                    "status": status,
-                    "count": len(scraped_items),
-                }
-            )
-            print(f"{scraper.site_name}: {status} ({len(scraped_items)} internships)")
-        except Exception as exc:
-            source_results.append(
-                {
-                    "source": scraper.site_name,
-                    "status": "failed",
-                    "count": 0,
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            )
-            print(f"{scraper.site_name}: failed: {type(exc).__name__}: {exc}")
-    return all_items, source_results
+from scraper.live_sources import scrape_all_public_sources
 
 
 def report_run(
@@ -76,7 +34,7 @@ def report_run(
     indexed: int = 0,
     message: str | None = None,
 ) -> None:
-    report = {
+    report: dict[str, Any] = {
         "event": "interniq_scrape_summary",
         "status": status,
         "sources": source_results,
@@ -91,66 +49,59 @@ def report_run(
 
 
 def update_internship_data() -> bool:
-    print("InternIQ PostgreSQL internship updater")
-    print("=" * 50)
+    backend = "SQLite" if is_sqlite_backend() else "PostgreSQL"
+    print(f"InternIQ live internship refresh ({backend})")
+    records, source_results = scrape_all_public_sources()
+    if not records:
+        successful_sources = [item for item in source_results if item["status"] in {"ok", "empty"}]
+        failed_sources = [item for item in source_results if item["status"] == "failed"]
+        status = "empty" if successful_sources and not failed_sources else "failed"
+        message = "Sources responded, but no internship postings matched." if status == "empty" else "No configured source returned usable results."
+        report_run(status, source_results, scraped=0, message=message)
+        return status == "empty"
 
-    scraped_items, source_results = scrape_all()
-    incomplete_sources = [
-        item["source"]
-        for item in source_results
-        if item["status"] in {"empty", "failed"}
-    ]
-    if not scraped_items:
-        message = "No internships were scraped. Nothing to upsert."
-        print(message)
-        report_run("failed", source_results, scraped=0, message=message)
-        return False
-
-    with get_db_connection() as conn:
-        summary = upsert_internships(conn, scraped_items)
-
-    if summary["upserted"] == 0:
-        message = "Every scraped record was invalid. Nothing was indexed."
-        print(message)
-        report_run(
-            "failed",
-            source_results,
-            scraped=len(scraped_items),
-            skipped=summary["skipped"],
-            message=message,
-        )
-        return False
-
-    try:
-        # Keep provider/index failures from rolling back successfully stored listings.
+    skipped = 0
+    if is_sqlite_backend():
+        upserted = 0
+        for record in records:
+            try:
+                upsert_local_internship(record)
+                upserted += 1
+            except (TypeError, ValueError):
+                skipped += 1
+        indexed = 0
+    else:
         with get_db_connection() as conn:
-            indexed = reindex_rag(conn)
-    except Exception as exc:
-        message = f"Internships were saved, but RAG reindex failed: {type(exc).__name__}: {exc}"
-        print(message)
-        report_run(
-            "index_failed",
-            source_results,
-            scraped=len(scraped_items),
-            upserted=summary["upserted"],
-            skipped=summary["skipped"],
-            message=message,
-        )
-        return False
+            summary = upsert_internships(conn, records)
+        upserted = summary["upserted"]
+        skipped = summary["skipped"]
+        indexed = 0
+        if upserted:
+            try:
+                with get_db_connection() as conn:
+                    indexed = reindex_rag(conn)["internships"]
+            except Exception as exc:
+                report_run(
+                    "index_failed",
+                    source_results,
+                    scraped=len(records),
+                    upserted=upserted,
+                    skipped=skipped,
+                    message=f"Listings were saved, but vector indexing failed: {type(exc).__name__}: {exc}",
+                )
+                return False
 
-    print(f"Upserted internships: {summary['upserted']}")
-    print(f"Skipped invalid records: {summary['skipped']}")
-    print(f"Indexed internship chunks: {indexed['internships']}")
-    print(f"Indexed career guidance documents: {indexed['career_guidance']}")
+    source_errors = any(item["status"] == "failed" for item in source_results)
     report_run(
-        "partial" if incomplete_sources else "ok",
+        "partial" if source_errors else "ok",
         source_results,
-        scraped=len(scraped_items),
-        upserted=summary["upserted"],
-        skipped=summary["skipped"],
-        indexed=indexed["internships"],
+        scraped=len(records),
+        upserted=upserted,
+        skipped=skipped,
+        indexed=indexed,
+        message="Some sources were unavailable; successful source results were retained." if source_errors else None,
     )
-    return True
+    return upserted > 0
 
 
 def main() -> None:
@@ -158,12 +109,10 @@ def main() -> None:
         success = update_internship_data()
     except RuntimeError as exc:
         print(f"Configuration error: {exc}")
-        print("Set DATABASE_URL and initialize the schema with: python backend/init_db.py")
         raise SystemExit(2) from exc
     except Exception as exc:
-        print(f"Update failed: {exc}")
+        print(f"Update failed: {type(exc).__name__}: {exc}")
         raise SystemExit(1) from exc
-
     raise SystemExit(0 if success else 1)
 
 

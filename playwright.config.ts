@@ -1,4 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
+const platformPythonPath = (folder: string) => path.resolve(folder, process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+const projectVenvPython = platformPythonPath('.venv');
+const backendVenvPython = platformPythonPath(path.join('backend', '.venv'));
+const availablePython = existsSync(projectVenvPython) ? projectVenvPython : backendVenvPython;
+const python = process.env.PYTHON || (existsSync(availablePython) ? `"${availablePython}"` : 'python');
 
 export default defineConfig({
   testDir: './e2e',
@@ -16,14 +24,29 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: true,
-    timeout: 30_000,
-    env: {
-      VITE_SUPABASE_URL: 'https://e2e-project.supabase.co',
-      VITE_SUPABASE_ANON_KEY: 'e2e-public-anon-key',
+  webServer: [
+    {
+      command: `${python} -m uvicorn main:app --host 127.0.0.1 --port 8001`,
+      cwd: 'backend',
+      url: 'http://127.0.0.1:8001/api/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      env: {
+        INTERNIQ_STORAGE_BACKEND: 'sqlite',
+        INTERNIQ_AUTH_MODE: 'local',
+        INTERNIQ_SQLITE_PATH: 'data/e2e-interniq.sqlite3',
+        ALLOWED_ORIGINS: 'http://127.0.0.1:4173',
+      },
     },
-  },
+    {
+      command: 'npm run dev -- --host 127.0.0.1 --port 4173 --strictPort',
+      url: 'http://127.0.0.1:4173',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      env: {
+        VITE_API_BASE_URL: 'http://127.0.0.1:8001',
+        VITE_AUTH_MODE: 'local',
+      },
+    },
+  ],
 });

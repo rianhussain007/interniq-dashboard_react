@@ -17,10 +17,12 @@ def test_health_endpoint_needs_no_external_configuration(client):
     response = client.get("/api/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
+    assert response.json()["storage"] == "sqlite"
 
 
 def test_keyword_search_is_public(monkeypatch, client):
+    monkeypatch.setenv("INTERNIQ_STORAGE_BACKEND", "postgres")
     captured = {}
     monkeypatch.setattr(main, "get_db_connection", lambda: nullcontext(object()))
     monkeypatch.setattr(
@@ -86,6 +88,7 @@ def test_mentor_recommendations_are_limited_to_retrieved_internships():
 
 
 def test_mentor_chat_composes_retrieved_context_into_structured_response(monkeypatch, client):
+    monkeypatch.setenv("INTERNIQ_STORAGE_BACKEND", "postgres")
     monkeypatch.setenv("GROQ_API_KEY", "provider-test-key")
     main.app.dependency_overrides[main.require_authenticated_user] = lambda: {"id": "student-123"}
     retrieved_docs = [

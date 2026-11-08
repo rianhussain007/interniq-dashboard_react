@@ -103,6 +103,9 @@ const InternshipCard = ({
           <span>Last seen {new Date(internship.last_seen_at).toLocaleDateString()}</span>
         </div>
       )}
+      {internship.matched_skills && internship.matched_skills.length > 0 && (
+        <p className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">Matches your profile: {internship.matched_skills.join(', ')}</p>
+      )}
       {internship.skills && internship.skills.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {internship.skills.slice(0, 4).map((skill) => (
@@ -112,6 +115,18 @@ const InternshipCard = ({
           ))}
         </div>
       )}
+      <Link to="/resume-scanner" onClick={() => {
+        try {
+          localStorage.setItem('interniq.tailorPosting', JSON.stringify({
+            title: internship.title,
+            company: internship.company,
+            skills: internship.skills ?? [],
+            description: internship.description ?? '',
+          }));
+        } catch (storageError) {
+          console.warn('Could not save the selected internship in browser storage:', storageError);
+        }
+      }} className="mt-3 inline-flex text-xs font-semibold text-indigo-700 underline dark:text-indigo-300">Tailor my resume for this role →</Link>
     </div>
     <div className="mt-6 grid grid-cols-3 gap-2">
       <button
@@ -174,6 +189,8 @@ export const InternshipFeed = () => {
   const [sort, setSort] = useState('relevance');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionState, setActionState] = useState<Record<string, { saved?: boolean; applied?: boolean }>>({});
   const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
@@ -194,6 +211,21 @@ export const InternshipFeed = () => {
     if (value.trim()) nextParams.set('q', value);
     else nextParams.delete('q');
     setSearchParams(nextParams, { replace: true });
+  };
+
+  const refreshListings = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setRefreshMessage(null);
+    try {
+      const result = await apiRequest<{ message: string }>('/api/internships/update', { method: 'POST' });
+      setRefreshMessage(result.message);
+      setRetryCount((count) => count + 1);
+    } catch (refreshError: unknown) {
+      setRefreshMessage(refreshError instanceof Error ? refreshError.message : 'Could not refresh internship sources.');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -410,7 +442,6 @@ export const InternshipFeed = () => {
                       id="search"
                       placeholder={searchMode === 'semantic' ? 'Describe the role you want...' : 'Title, company...'}
                       value={searchTerm}
-                      disabled={searchMode === 'semantic'}
                       onChange={e => handleSearchTermChange(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-70"
                     />
@@ -426,7 +457,7 @@ export const InternshipFeed = () => {
                     {searchMode === 'semantic' ? 'AI matching on · Switch to keyword' : user?.id ? 'Try AI semantic search' : 'Sign in for AI semantic search'}
                   </button>
                   {searchMode === 'semantic' && (
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Matching by meaning; the text field is locked until you switch back.</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">AI matching uses your query plus your profile skills (set them in Profile Setup). Results show why each role matched.</p>
                   )}
                 </div>
                 <div>
@@ -449,9 +480,10 @@ export const InternshipFeed = () => {
                     className="w-full px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-transparent focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
                     <option>All</option>
-                    <option>Internshala</option>
-                    <option>LinkedIn</option>
-                    <option>Naukri</option>
+                    <option>Jobicy</option>
+                    <option>Greenhouse</option>
+                    <option>Lever</option>
+                    <option>Ashby</option>
                   </select>
                 </div>
                 <div>
@@ -487,6 +519,22 @@ export const InternshipFeed = () => {
 
           {/* Internship Listings */}
           <main className="md:w-3/4">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-white px-4 py-3 shadow-sm dark:border-indigo-900/60 dark:bg-gray-800">
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">Live career-board listings</p>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Refresh public sources to check for newly published internships.</p>
+                {refreshMessage && <p role="status" className="mt-2 text-xs font-medium text-indigo-700 dark:text-indigo-300">{refreshMessage}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={() => void refreshListings()}
+                disabled={isRefreshing}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+                {isRefreshing ? 'Checking sources…' : 'Refresh live listings'}
+              </button>
+            </div>
             {actionError && (
               <div role="alert" className="mb-5 flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
                 <p>{actionError}</p>
@@ -542,8 +590,8 @@ export const InternshipFeed = () => {
                   ))
                 ) : (
                   <div className="lg:col-span-2 text-center py-12">
-                    <h3 className="text-xl font-semibold">No Internships Found</h3>
-                    <p className="text-gray-500 mt-2">Try adjusting your filters to find more opportunities.</p>
+                    <h3 className="text-xl font-semibold">No matching live internships</h3>
+                    <p className="mx-auto mt-2 max-w-lg text-sm text-gray-500">Try a wider search or refresh the connected public career boards. New listings appear here as soon as a source provides them.</p>
                   </div>
                 )}
               </div>

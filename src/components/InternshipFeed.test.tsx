@@ -125,8 +125,8 @@ describe('InternshipFeed', () => {
     await user.type(screen.getByRole('textbox', { name: 'Keyword Search' }), 'frontend engineer');
     await user.click(screen.getByRole('button', { name: 'Try AI semantic search' }));
 
-    expect(await screen.findByText('Matching by meaning; the text field is locked until you switch back.')).toBeTruthy();
-    expect((screen.getByRole('textbox', { name: 'AI Semantic Search' }) as HTMLInputElement).disabled).toBe(true);
+    expect(await screen.findByText(/AI matching uses your query plus your profile skills/)).toBeTruthy();
+    expect((screen.getByRole('textbox', { name: 'AI Semantic Search' }) as HTMLInputElement).disabled).toBe(false);
     await waitFor(() => {
       expect(mockApiRequest).toHaveBeenCalledWith(
         expect.stringContaining('/api/internships/semantic-search'),

@@ -4,24 +4,26 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 
 ## Current Features
 
-- Internship aggregation from scraper/API sources.
+- Live internship ingestion from public employer career-board APIs and Jobicy's public job feed.
 - React, TypeScript, Vite, and Tailwind dashboard.
 - FastAPI backend with CORS and environment-based configuration.
-- Public keyword search and authenticated AI search with location/source/work-mode filters, deadline sorting, and closing-soon cues.
-- Optional authenticated semantic search uses pgvector nearest neighbors, then applies recency/deadline sorting within the matched candidate set.
-- Account-based saved listings and application tracking with editable status and private notes.
+- Public keyword search and authenticated role/skill matching with location/source/work-mode filters and deadline sorting. Local mode uses transparent role and term matching; PostgreSQL mode adds Gemini embeddings and pgvector retrieval.
+- SQLite-backed local email/password accounts, persistent sessions, private profiles, saved listings, applications, and checklist progress.
 - On-demand internship update endpoint.
 - Scraper update responses expose per-source and indexing totals as structured JSON.
 - Retrieval-augmented mentor using LangChain, Gemini embeddings, PostgreSQL/pgvector, and schema-validated Groq output.
 - Scrape-to-search indexing: normalize postings, split them into overlapping chunks, embed only changed chunks, and update pgvector in the same database transaction.
 - Mentor responses include grounded next steps, source references, and validated internship recommendations.
-- Career tools: a local resume builder and PDF content checklist, three resume layouts, role-based interview practice, personalized outreach drafts, and an internship compensation calculator.
+- Career tools: a resume builder with account-synced drafts and PDF content checklist, three resume layouts, role-based interview practice, personalized outreach drafts, and an internship compensation calculator.
+- Explainable resume tailoring: compare a resume with a posting to see covered and missing skills, term coverage, and suggestions. Coverage is a checklist ratio, never an ATS score.
+- Communities, events, and in-app notifications: join a community, post, RSVP to events, and receive notifications for new posts in communities you belong to.
+- InternIQ Guide: a bottom-corner app-guide bot that routes students to the right tool (it is guidance, not career advice; the Mentor route handles that).
 
-The career tools are deliberately usable without model-provider calls: resume drafts stay in browser storage, PDF text is analyzed in the browser, and practice/outreach content is not sent to InternIQ. The compensation calculator uses only figures entered by the student; it does not claim to provide market-rate benchmarks.
+The six career tools work without an account or model-provider calls: the resume PDF checklist runs in the browser, and practice/outreach content is not sent to InternIQ. A signed-in account additionally syncs resume drafts across devices and enables the server-side job-description comparison, which sends that resume text to the backend. The compensation calculator uses only figures entered by the student; it does not claim to provide market-rate benchmarks. Saved listings, applications, profiles, checklist progress, communities, events, notifications, and personalized role matching need a local account.
 
 ## Prototype Readiness
 
-This repository contains an implemented software prototype, not a live production service. The workspace used for the current review has no configured Supabase project, PostgreSQL/pgvector database, Gemini or Groq credentials, or cloud deployment. CI, deterministic backend tests, and a local sample-API browser check provide evidence for the coded flows, but the real scrape-to-index-to-retrieval journey and authenticated student journey still need staging verification.
+This repository contains a local-first software prototype, not a hosted production service. Local sign-up, sign-in, account data, profiles, saves, applications, and checklist use SQLite without cloud credentials. Live listings depend on network access and configured employer-board slugs; vector search and provider-backed mentor replies require PostgreSQL/pgvector and Gemini/Groq credentials. Cloud deployment and staging have not been provisioned.
 
 The current provisional software readiness assessment is **TRL 4 (laboratory prototype)**: critical components have been built and checked locally with deterministic test doubles. This is not a NASA certification. Do not claim TRL 5 or higher until the end-to-end system has been tested in a realistic staging environment; deployment, monitoring, security, and user validation are separate release gates. The estimate and evidence log are in [`PROJECT_PLAN.md`](PROJECT_PLAN.md).
 
@@ -39,8 +41,8 @@ The current provisional software readiness assessment is **TRL 4 (laboratory pro
 ## Tech Stack
 
 - Frontend: React, TypeScript, Vite, Tailwind CSS.
-- Backend: Python, FastAPI, LangChain, Gemini embeddings, Groq chat, python-dotenv, BeautifulSoup, Selenium.
-- Current data store: PostgreSQL.
+- Backend: Python, FastAPI, local account/session API, public ATS API clients, optional LangChain/Gemini/Groq services.
+- Local data store: SQLite. Optional hosted data store: PostgreSQL.
 - RAG vector store: PostgreSQL + pgvector.
 - Planned deployment: GCP Cloud Run, Cloud SQL, Firebase Hosting, Cloud Scheduler, Secret Manager, Cloud Storage.
 
@@ -60,32 +62,30 @@ Copy the root environment example:
 cp .env.example .env
 ```
 
-For local development, these defaults are expected:
+Local development uses SQLite and local email/password auth; no Supabase or PostgreSQL service is needed:
 
 ```env
 VITE_API_BASE_URL="http://127.0.0.1:8000"
-VITE_SUPABASE_URL="https://your-project-ref.supabase.co"
-VITE_SUPABASE_ANON_KEY="your-supabase-publishable-or-anon-key"
-VITE_GOOGLE_CLIENT_ID="your-google-oauth-client-id"
+VITE_AUTH_MODE="local"
 ALLOWED_ORIGINS="http://localhost:5173,http://127.0.0.1:5173"
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/interniq"
-DB_CONNECT_TIMEOUT_SECONDS="10"
-SUPABASE_URL="https://your-project-ref.supabase.co"
-SUPABASE_ANON_KEY="your-supabase-publishable-or-anon-key"
-INTERNIQ_ADMIN_TOKEN="generate-a-long-random-token"
-GROQ_API_KEY="your-groq-api-key"
-GROQ_MODEL="openai/gpt-oss-20b"
-GEMINI_API_KEY="your-gemini-api-key"
-GEMINI_EMBEDDING_MODEL="gemini-embedding-2-preview"
-RAG_EMBEDDING_DIMENSIONS="768"
-RAG_TOP_K="6"
-RAG_CHUNK_SIZE="900"
-RAG_CHUNK_OVERLAP="120"
+INTERNIQ_STORAGE_BACKEND="sqlite"
+INTERNIQ_AUTH_MODE="local"
+INTERNIQ_SQLITE_PATH="backend/data/interniq.sqlite3"
 ```
 
-The frontend only reads `VITE_*` variables. Backend-only secrets such as `GROQ_API_KEY` must not be exposed through `VITE_*` variables.
+The frontend only reads `VITE_*` variables. Backend secrets must not be exposed through `VITE_*` variables. The SQLite file is created on first use and excluded from Git.
 
-Email/password and Google sign-in use Supabase Auth. Enable the email provider and, if needed, Google in the Supabase dashboard. The Google client ID must match the configured Google provider. The backend uses `SUPABASE_URL` and `SUPABASE_ANON_KEY` to verify bearer tokens; use the same project URL and public anon/publishable key as the frontend. Set `INTERNIQ_ADMIN_TOKEN` to a long random value for scraper and full-reindex endpoints.
+The refresh uses built-in public employer boards for Stripe, Datadog, Figma, Roblox, Duolingo, Coinbase, Scale AI, MongoDB, Affirm, Pinterest, Cloudflare, Palantir, Ramp, Perplexity, Sentry, and Notion. Each refresh reads currently published roles and keeps only internship/co-op postings. Customize or replace a provider list with comma-separated board slugs:
+
+```env
+INTERNSHIP_GREENHOUSE_BOARDS="stripe:Stripe,datadog:Datadog"
+INTERNSHIP_LEVER_BOARDS="palantir:Palantir"
+INTERNSHIP_ASHBY_BOARDS="ramp:Ramp,notion:Notion"
+```
+
+Jobicy's public feed is also checked and its source URL is retained. Listings are deduplicated in SQLite. Sources can change their public board slugs or have no open internships on a given day; refresh output reports each source's status and count. LinkedIn is intentionally not crawled.
+
+A new local database starts with an empty internships table. Use **Refresh live listings** to retrieve currently published internships from connected employer boards; InternIQ does not add invented companies or roles to the feed. Keyword search ranks by title, skills, company, description, and profile-skill overlap, and freshness only breaks ties, so unrelated postings are not returned as matches. In SQLite mode, role matching works offline by expanding the query with role concepts and the student's profile skills, returning a normalized ranking signal plus matched profile skills.
 
 ### Backend
 
@@ -95,7 +95,7 @@ From the project root:
 cd backend
 python -m venv .venv
 .\.venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -105,7 +105,7 @@ Health check:
 curl http://127.0.0.1:8000/api/health
 ```
 
-Initialize the PostgreSQL schema before running internship routes:
+SQLite tables initialize automatically. Create an account using **Sign up** in the app. PostgreSQL mode is optional; set `INTERNIQ_STORAGE_BACKEND=postgres`, provide `DATABASE_URL`, and initialize the schema before starting the API.
 
 ```bash
 python init_db.py
@@ -124,9 +124,9 @@ docker build -t interniq-api .
 docker run --rm -p 8080:8080 interniq-api
 ```
 
-Then check `http://localhost:8080/api/health`. The image includes Chromium and ChromeDriver so the same image can run the Selenium scrapers as a Cloud Run Job. On Windows, the scraper uses `drivers/chromedriver.exe` when present; elsewhere Selenium Manager can resolve a driver, or set `CHROME_BIN` and `CHROMEDRIVER_PATH` explicitly.
+Then check `http://localhost:8080/api/health`. The current listing refresh uses public JSON APIs and does not need a browser driver.
 
-The scraper automatically refreshes the RAG index after upserting postings. To build or refresh it manually after changing the embedding model or chunk settings:
+In PostgreSQL mode, the scraper refreshes the RAG index after upserting postings. To build or refresh it manually after changing the embedding model or chunk settings:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/rag/reindex -H "Content-Type: application/json" -H "X-InternIQ-Admin-Token: <INTERNIQ_ADMIN_TOKEN>" -d "{}"
@@ -134,16 +134,16 @@ curl -X POST http://127.0.0.1:8000/api/rag/reindex -H "Content-Type: application
 
 ### Scraper
 
-The scraper writes normalized internship records directly into PostgreSQL:
+Refresh current internship listings from configured public sources:
 
 ```bash
 python scraper/update_internships.py
 ```
 
-The backend update endpoint runs the same scraper:
+The local API also runs the same refresh workflow:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/internships/update -H "X-InternIQ-Admin-Token: <INTERNIQ_ADMIN_TOKEN>"
+curl -X POST http://127.0.0.1:8000/api/internships/update
 ```
 
 ### Frontend
@@ -170,7 +170,7 @@ python -m pip install -r backend/requirements-dev.txt
 python -m pytest
 ```
 
-The eleven frontend interaction tests use a simulated browser. Three Playwright tests run in Chromium against the Vite app and check public search, guest sign-in return, a mobile layout, and the protected resume builder with a synthetic test session. The UI tests use controlled API responses; backend tests use fake providers and storage connections where appropriate. These tests do not require API keys or a live database. CI runs frontend lint, both frontend test suites and build, backend tests and syntax checks, and a backend container build.
+The frontend interaction tests use a simulated browser. Four Playwright tests run Chromium against Vite and FastAPI, covering public search, guest sign-in return, mobile layout, guest career-tool access, and the full local register/restore/sign-in/profile flow. The UI tests use controlled API responses; backend tests use fake providers and isolated SQLite files where appropriate. These automated checks do not require API keys or a live database. CI runs frontend lint, frontend tests and build, backend tests and syntax checks, and a backend container build.
 
 The older scripts named `backend/test_api*.py` and `backend/scraper/test_api*.py` are manual RapidAPI connectivity probes, not application tests. They may call an external service and require a valid API key; the default pytest suite intentionally does not collect them.
 
@@ -180,6 +180,7 @@ Current routes:
 
 - `GET /api/health`
 - `GET /api/internships`
+- `GET /api/internships/{internship_id}`
 - `GET /api/internships/search`
 - `GET /api/internships/semantic-search`
 - `GET /api/dashboard/summary`
@@ -193,8 +194,21 @@ Current routes:
 - `POST /api/applications`
 - `POST /api/mentor-chat`
 - `POST /api/rag/reindex`
+- `GET /api/resume/draft`
+- `PUT /api/resume/draft`
+- `POST /api/resume/tailor`
+- `GET /api/communities`
+- `POST /api/communities`
+- `POST /api/communities/join`
+- `GET /api/communities/posts`
+- `POST /api/communities/posts`
+- `GET /api/events`
+- `POST /api/events`
+- `POST /api/events/rsvp`
+- `GET /api/notifications`
+- `POST /api/notifications/read`
 
-Dashboard summary, checklist, saved internships, applications, mentor chat, and semantic internship search require a valid Supabase bearer token. The backend verifies the token with Supabase and binds private records to that verified user ID. Checklist progress is stored per account in PostgreSQL and syncs across devices. Semantic search embeds the query with `GEMINI_API_KEY` and ranks the existing internship vectors; keyword search remains available without sign-in. Scraping and full reindex require the admin header.
+Dashboard summary, checklist, saved internships, applications, profile, mentor chat, and personalized search require a valid bearer session. Local mode verifies the session against SQLite and scopes private records to that user; PostgreSQL/Supabase verification is an optional hosted configuration. SQLite role matching works without model keys. PostgreSQL mode can embed queries with `GEMINI_API_KEY` and rank internship vectors. Public keyword search is available without sign-in. Local listing refresh checks public feeds; hosted refresh and full reindex require the admin header.
 
 ## RAG Assistant
 
@@ -293,6 +307,6 @@ The frontend environment values are embedded in the static build. Only use the S
 
 ## Notes
 
-The local scrape → chunk → embed → retrieve → structured response workflow is implemented. The container and repeatable Cloud Run deployment path are included; executing the first hosted deployment still requires a configured GCP project, database, secrets, and deployment identity.
+The optional PostgreSQL workflow implements scrape → chunk → embed → retrieve → structured response. Local SQLite accounts and role matching work without cloud services. The container and repeatable Cloud Run deployment path are included; executing the first hosted deployment still requires a configured GCP project, database, secrets, and deployment identity.
 
-Supabase Auth provides the email/password and Google sessions. Private API routes verify the bearer token and enforce the authenticated user ID; database row-level security policies are restored when the schema runs on Supabase.
+Local email/password authentication is the zero-configuration default. Supabase email/password and Google sessions are an optional future hosted mode. Private API routes verify the configured bearer session and enforce the authenticated user ID; database row-level security policies are restored when the schema runs on Supabase.

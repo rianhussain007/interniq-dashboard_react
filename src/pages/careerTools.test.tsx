@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AuthProvider } from '../contexts/AuthContext';
 import InterviewPrepPage from './InterviewPrepPage';
 import NetworkingPage from './NetworkingPage';
 import ResumeBuilderPage from './ResumeBuilderPage';
@@ -21,7 +22,7 @@ describe('InternIQ career tools', () => {
 
   it('persists a resume draft locally and updates the live preview', async () => {
     const user = userEvent.setup();
-    render(<MemoryRouter><ResumeBuilderPage /></MemoryRouter>);
+    render(<AuthProvider><MemoryRouter><ResumeBuilderPage /></MemoryRouter></AuthProvider>);
 
     await user.type(screen.getByLabelText('Full name'), 'Jordan Lee');
     expect(await screen.findByRole('heading', { name: 'Jordan Lee' })).toBeTruthy();
@@ -33,12 +34,14 @@ describe('InternIQ career tools', () => {
   it('carries a selected resume template into the builder', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={['/resume-templates']}>
-        <Routes>
-          <Route path="/resume-templates" element={<ResumeTemplatesPage />} />
-          <Route path="/resume-builder" element={<ResumeBuilderPage />} />
-        </Routes>
-      </MemoryRouter>,
+      <AuthProvider>
+        <MemoryRouter initialEntries={['/resume-templates']}>
+          <Routes>
+            <Route path="/resume-templates" element={<ResumeTemplatesPage />} />
+            <Route path="/resume-builder" element={<ResumeBuilderPage />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>,
     );
 
     await user.click(screen.getAllByRole('link', { name: /Use this template/ })[2]);
@@ -46,7 +49,7 @@ describe('InternIQ career tools', () => {
   });
 
   it('checks an invalid resume file without starting PDF parsing', async () => {
-    render(<MemoryRouter><ResumeScannerPage /></MemoryRouter>);
+    render(<AuthProvider><MemoryRouter><ResumeScannerPage /></MemoryRouter></AuthProvider>);
     const file = new File(['not a pdf'], 'resume.txt', { type: 'text/plain' });
     fireEvent.change(screen.getByLabelText('Choose resume PDF'), { target: { files: [file] } });
 

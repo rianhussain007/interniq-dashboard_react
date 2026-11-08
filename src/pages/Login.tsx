@@ -4,12 +4,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import GoogleLoginButton from '../components/GoogleLoginButton';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { authMode, isSupabaseConfigured } from '../lib/supabase';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const isLocalAuthMode = authMode !== 'supabase';
+const isAuthConfigured = isLocalAuthMode || isSupabaseConfigured;
 
 // Wrap the component with GoogleOAuthProvider
 const LoginPageContent: React.FC = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +51,7 @@ const LoginPageContent: React.FC = () => {
 
     try {
       const result = isSignUp
-        ? await signUp(email, password)
+        ? await signUp(name, email, password)
         : await login(email, password);
       if (!result.success) {
         setError(result.error || (isSignUp ? 'Could not create your account.' : 'Login failed. Please try again.'));
@@ -74,7 +77,7 @@ const LoginPageContent: React.FC = () => {
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{isSignUp ? 'Save roles and build your internship plan' : 'Sign in to continue to your dashboard'}</p>
           </div>
 
-          {!isSupabaseConfigured && (
+          {!isAuthConfigured && (
             <div role="alert" className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
               <p className="font-semibold">Sign-in is not connected yet</p>
               <p className="mt-1">
@@ -100,6 +103,25 @@ const LoginPageContent: React.FC = () => {
 
           {/* Regular Login Form */}
           <form onSubmit={handleLogin} className="space-y-4">
+            {isSignUp && (
+              <div>
+                <label htmlFor="full-name" className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Full name
+                </label>
+                <input
+                  type="text"
+                  id="full-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  placeholder="Your name"
+                  required
+                  maxLength={100}
+                  autoComplete="name"
+                  disabled={isLoading}
+                />
+              </div>
+            )}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Email address
@@ -141,7 +163,7 @@ const LoginPageContent: React.FC = () => {
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isLoading || !isSupabaseConfigured || !email || !password}
+                disabled={isLoading || !isAuthConfigured || !email || !password || (isSignUp && !name.trim())}
                 className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
@@ -154,17 +176,16 @@ const LoginPageContent: React.FC = () => {
             </div>
           </form>
 
-          {/* Divider with "or" */}
-          <div className="flex items-center my-8">
-            <hr className="w-full border-gray-300 dark:border-gray-600" />
-            <span className="px-4 text-sm text-gray-500">OR</span>
-            <hr className="w-full border-gray-300 dark:border-gray-600" />
-          </div>
-
-          {/* Google Sign-In Button */}
-          <div className="mt-4">
-            <GoogleLoginButton onError={setError} />
-          </div>
+          {!isLocalAuthMode && (
+            <>
+              <div className="my-8 flex items-center">
+                <hr className="w-full border-gray-300 dark:border-gray-600" />
+                <span className="px-4 text-sm text-gray-500">OR</span>
+                <hr className="w-full border-gray-300 dark:border-gray-600" />
+              </div>
+              <div className="mt-4"><GoogleLoginButton onError={setError} /></div>
+            </>
+          )}
           
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">

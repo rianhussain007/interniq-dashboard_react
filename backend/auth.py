@@ -8,8 +8,17 @@ import requests
 from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from local_store import user_for_session
+
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def is_local_auth_mode() -> bool:
+    configured_mode = os.getenv("INTERNIQ_AUTH_MODE")
+    if configured_mode:
+        return configured_mode.strip().lower() == "local"
+    return not (os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY"))
 
 
 def require_authenticated_user(
@@ -17,6 +26,17 @@ def require_authenticated_user(
 ) -> dict[str, Any]:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Sign in to continue.")
+
+    if is_local_auth_mode():
+        user = user_for_session(credentials.credentials)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Your session is invalid or expired. Sign in again.")
+        return {
+            "id": user["id"],
+            "email": user["email"],
+            "user_metadata": {"full_name": user["name"]},
+            "app_metadata": {"provider": "email"},
+        }
 
     project_url = os.getenv("SUPABASE_URL", "").rstrip("/")
     anon_key = os.getenv("SUPABASE_ANON_KEY")

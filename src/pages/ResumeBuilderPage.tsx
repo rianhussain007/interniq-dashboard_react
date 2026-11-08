@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { apiRequest } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { Download, Printer, RotateCcw } from 'lucide-react';
 import { CareerToolLayout, inputClass, labelClass, toolCardClass } from '../components/CareerToolLayout';
@@ -44,8 +46,28 @@ const ResumeBuilderPage = () => {
   const [searchParams] = useSearchParams();
   const requestedTemplate = searchParams.get('template');
   const template = resumeTemplates.find((item) => item.id === requestedTemplate) ?? resumeTemplates[0];
+  const { user } = useAuth();
   const [draft, setDraft] = useState<ResumeDraft>(readDraft);
   const [savedAt, setSavedAt] = useState('');
+  const [serverNote, setServerNote] = useState('');
+  // Never write to the server before the stored draft has been read: an early
+  // autosave of an empty local cache would erase the account's saved resume.
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setHydrated(true);
+      return;
+    }
+    let active = true;
+    apiRequest<Partial<ResumeDraft>>('/api/resume/draft')
+      .then((saved) => {
+        if (active && saved && Object.keys(saved).length) setDraft((d) => ({ ...d, ...saved }));
+      })
+      .catch(() => undefined)
+      .finally(() => { if (active) setHydrated(true); });
+    return () => { active = false; };
+  }, [user?.id]);
 
   useEffect(() => {
     try {
@@ -54,7 +76,14 @@ const ResumeBuilderPage = () => {
     } catch {
       setSavedAt('');
     }
-  }, [draft]);
+    if (!user?.id || !hydrated) return;
+    const t = window.setTimeout(() => {
+      apiRequest('/api/resume/draft', { method: 'PUT', body: JSON.stringify({ draft }) })
+        .then(() => setServerNote('Saved to your account'))
+        .catch(() => setServerNote('Browser-only (sign-in needed to sync)'));
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [draft, user?.id, hydrated]);
 
   const update = (field: keyof ResumeDraft, value: string) => setDraft((current) => ({ ...current, [field]: value }));
   const downloadText = () => {
@@ -71,7 +100,7 @@ const ResumeBuilderPage = () => {
     <CareerToolLayout eyebrow="Resume tools" title="Resume builder" description="Draft a focused, evidence-led resume and preview it as you go. Your draft stays in this browser; print or save to PDF when it is ready.">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-950 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-100">
         <span><strong>{template.name} template</strong> · {template.description}</span>
-        <span aria-live="polite">{savedAt ? `Saved in this browser at ${savedAt}` : 'Draft is only stored on this device'}</span>
+        <span aria-live="polite">{savedAt ? `Saved in this browser at ${savedAt}` : 'Draft is only stored on this device'}{serverNote ? ` · ${serverNote}` : ''}</span>
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <section className={`${toolCardClass} resume-editor`} aria-labelledby="resume-editor-heading">

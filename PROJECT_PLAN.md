@@ -1,26 +1,26 @@
 # InternIQ Product Readiness Plan
 
-Assessment date: 2026-11-08. This is an evidence-based engineering estimate for the code in this repository, not a claim of a live production launch.
+Assessment date: 2026-11-09. Percentages are scope estimates, not test scores or a claim of a production launch.
 
 ## Current readiness
 
 | Area | Estimate | Evidence | Remaining gap |
 | --- | ---: | --- | --- |
-| Agentic aggregator prototype | 80% | Scraper normalization, chunking, embedding/index interfaces, pgvector retrieval, structured mentor output, search filters, and deterministic unit/API tests are implemented. The public feed, guest sign-in return, and mobile layout now pass Chromium checks with controlled API data; semantic retrieval routing is covered with a controlled response. | No configured database/model/auth provider, so no real scrape → index → retrieve → grounded answer run or provider-backed authenticated journey has been exercised. |
-| Whole dashboard prototype | 82% | Core dashboard, search, saved/application flows, resume analyzer, and all six previously empty career-tool routes now have usable workflows. Eleven interaction tests and three Chromium smoke tests cover career tools, public search, guest sign-in return, mobile layout, a protected resume-builder route, and structured mentor requests/responses. | A full visual review of every tool, print output, and PDF edge case remains; API responses and the browser auth session in automated UI tests are controlled fixtures. |
-| Production readiness | 45% | GitHub CI passed for [`7f201bc`](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42509057655), including frontend lint, strict type-checking, eleven interaction tests, three Chromium smoke tests, build, 15 deterministic backend tests, Python syntax checks, and backend container build. Local `npm audit` reports zero vulnerabilities. | No provisioned staging environment, live-provider evidence, deployed app, production secrets, monitoring/alert checks, recovery exercise, or user acceptance results. |
+| Local-first product scope | 85% | Local SQLite registration/sign-in, account-scoped profile/saved/applications/checklist, resume drafts, community/events, public live-feed adapters, role matching, resume tools, interview practice, networking drafts, offer comparison, branding tips, and GitHub profile lookup are implemented. The current workspace has 165 postings fetched from public employer boards; the demo account signs in and reaches the dashboard. | Source coverage and freshness are not guaranteed; some tools are intentionally browser-local, and a first-run database stays empty until a live refresh. Full visual review, OCR, password recovery, and production-grade account operations remain out of scope for this local prototype. |
+| Agentic / retrieval prototype | 70% | Chunking, embedding/index interfaces, PostgreSQL/pgvector retrieval, and structured mentor output are implemented. SQLite role matching works offline with explainable term/profile overlap. | No configured PostgreSQL, Gemini, or Groq credentials; a live scrape → embed → vector retrieve → grounded mentor journey has not been demonstrated in this workspace. |
+| Production readiness | 25% | Local CI commands and end-to-end checks cover the main auth and browsing journeys; deployment definitions exist for a future hosted environment. | No staging deployment, production secrets, monitoring/alerts, recovery exercise, accessibility review, or user acceptance results. |
 
-These estimates track implementation and operating evidence separately. A compiled feature is not counted as a live integration. The prototype can be demonstrated today with controlled sample data; the current workspace cannot honestly demonstrate a live end-to-end service.
+These estimates track implemented scope separately from operating evidence. The local prototype can demonstrate sign-up, sign-in, live-source refresh, internship search, dashboard workflows, and browser tools. It is not a hosted service, and optional vector/LLM paths have not been validated with live provider credentials.
 
 ## Implemented in this delivery
 
-- [x] Make internship browsing public while keeping saved items, application tracking, profile data, and semantic search behind verified authentication.
+- [x] Make internship browsing and the six browser-local career tools public while keeping saved items, application tracking, profile data, and semantic search behind verified authentication.
 - [x] Route signed-out visitors from `/` to the public feed and provide a sign-in link after a guest save attempt.
 - [x] Add deterministic backend tests for identity boundaries, search validation, ingestion normalization, embedding reuse, retrieval ordering, and the authenticated mentor route's grounded structured response.
 - [x] Add six simulated-browser interaction tests covering resume drafting, template handoff, PDF rejection, interview practice, networking copy, and offer comparison.
 - [x] Add four simulated-browser internship-feed tests covering URL-backed search, guest sign-in return, semantic search routing, and signed-in save/application actions.
 - [x] Add a simulated-browser mentor test covering the authenticated request context, structured response, citations, next steps, and recommended internship.
-- [x] Add Chromium end-to-end smoke tests for public search, guest sign-in return, mobile feed layout, and a protected resume-builder workflow using a test-only session.
+- [x] Add Chromium end-to-end smoke tests for public search, guest sign-in return, mobile feed layout, and guest access to all six browser-local career tools.
 - [x] Add strict TypeScript checking for the app, frontend tests, and Vite configs.
 - [x] Add backend test dependencies and run the suite in CI.
 - [x] Build a browser-local resume editor with preview, local autosave, plain-text export, and print/save-to-PDF.
@@ -30,19 +30,22 @@ These estimates track implementation and operating evidence separately. A compil
 - [x] Add personalized networking-message drafts with clipboard copy.
 - [x] Add side-by-side offer arithmetic for contract pay and student-entered benefit value.
 - [x] Remove the dead placeholder component and obsolete CDN-worker resume analyzer.
-- [x] Browser-check the guest internship feed and save-to-sign-in prompt using a local sample API.
+- [x] Verify the demo user can sign in through the app and load the authenticated dashboard.
+- [x] Remove invented internship seeding; test fixtures are isolated to backend tests, and the product feed uses fetched public postings only.
+- [x] Check the main routes for resume tools, interview practice, networking, salary comparison, profile, saved items, applications, community/events, branding, and GitHub lookup.
 
-The browser-side resume, interview, networking, and compensation tools make no AI or market-data claims. The resume draft is stored only in the user's browser; the scanner reads PDF text locally. The calculator formats user-entered figures and excludes tax, exchange rates, and external wage benchmarks.
+The browser-side resume, interview, networking, and compensation tools make no AI or market-data claims. Resume drafts are stored in the browser and synced to SQLite for signed-in users; the scanner reads PDF text locally. The calculator formats user-entered figures and excludes tax, exchange rates, and external wage benchmarks.
 
 ## Remaining delivery gates
 
 ### A. Full local and UI verification
 
-- [x] Local frontend lint, strict typecheck, production build, eleven frontend interaction tests, three Chromium smoke tests, 15 backend tests, and `npm audit` pass. GitHub CI passed for `7f201bc` ([run](https://github.com/rianhussain007/interniq-dashboard_react/actions/runs/42509057655)).
-- [x] Exercise public feed, guest sign-in return, mobile feed layout, and the protected resume-builder route in Chromium with controlled local data.
+- [x] Local frontend lint, strict typecheck, production build, eleven frontend interaction tests, four Chromium end-to-end tests, and 37 backend tests pass in the current workspace.
+- [x] Exercise public feed, local registration/session restore/sign-in/profile save, mobile layout, and guest access to the browser-local career tools in Chromium.
+- [x] Sign in to the local demo account and verify the authenticated dashboard renders.
 - [ ] Visually review every career-tool route, print output, invalid PDF cases, and responsive layouts beyond the internship feed.
 - [x] Add automated frontend interaction coverage for all six career tools.
-- [x] Add automated frontend coverage for URL-backed keyword search, semantic search routing, guest sign-in return, authenticated save/application actions (controlled API responses), and a real-browser protected route.
+- [x] Add automated frontend coverage for URL-backed keyword search, semantic search routing, guest sign-in return, authenticated save/application actions (controlled API responses), and real-browser access to guest career tools.
 - [x] Add automated frontend coverage for the mentor interaction flow, including the structured response and source rendering.
 - [x] Remove unmounted legacy pages/layouts that duplicated current routes or exposed stale links; document the remaining manual external-API probes.
 
@@ -83,7 +86,7 @@ Do not raise the rating on the basis of added code, a successful build, or mocke
 
 ## Time estimate and dependencies
 
-- Eleven frontend interaction tests, three Chromium smoke tests, 15 backend tests, strict frontend type-checking, the production build, and GitHub CI pass for the tested code on `7f201bc`. Live staging and production remain gated on external services and credentials.
+- Eleven frontend interaction tests, four Chromium end-to-end tests, 37 backend tests, strict frontend type-checking, and the production build pass locally. Live staging and production remain gated on external services and credentials.
 - A first staging integration pass is estimated at **0.5–1.5 focused days after** valid database, model-provider, auth, and cloud access are available. Provider approval, database provisioning, or source-site changes can extend that calendar time.
 - Production launch time is not responsibly estimable until staging results, product acceptance, monitoring, and operating ownership are known.
 - At the last workspace audit, `.env`, provider credentials, a live PostgreSQL/pgvector instance, and cloud project access were unavailable. No TRL above the local prototype level is supported by evidence yet.

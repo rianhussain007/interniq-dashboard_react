@@ -1,9 +1,13 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Moon, Sun, Menu, X, User as UserIcon, LogOut } from 'lucide-react';
+import { Search, Moon, Sun, Menu, X, User as UserIcon, LogOut, Bell } from 'lucide-react';
 import logo from '../../assets/favicon_interniq.png';
 import { useAuth } from '../contexts/AuthContext';
+import { apiRequest } from '../lib/api';
+
+type NotificationItem = { id: string; kind: string; title: string; body: string; link: string; read_at: string | null; created_at: string };
+type NotificationFeed = { items: NotificationItem[]; unread_count: number };
 
 // A utility function to combine class names
 import { cn } from '../lib/utils';
@@ -18,12 +22,42 @@ export const Navbar = () => {
   const routeQuery = searchParams.get('q') ?? '';
   const [searchQuery, setSearchQuery] = useState(routeQuery);
   const { user, logout, isAuthenticated } = useAuth();
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    let active = true;
+    const loadNotifications = () => {
+      void apiRequest<NotificationFeed>('/api/notifications')
+        .then((feed) => {
+          if (!active) return;
+          setNotifications(feed.items);
+          setUnreadCount(feed.unread_count);
+        })
+        .catch(() => undefined);
+    };
+    loadNotifications();
+    const timer = window.setInterval(loadNotifications, 60_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [isAuthenticated]);
+
+  const markNotificationsRead = () => {
+    setUnreadCount(0);
+    setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at ?? new Date().toISOString() })));
+    void apiRequest('/api/notifications/read', { method: 'POST' }).catch(() => undefined);
+  };
   
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     setIsMenuOpen(false);
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
@@ -92,7 +126,7 @@ export const Navbar = () => {
           </div>
 
           {/* Center Section: Navigation Links & Search (Desktop) */}
-          <div className="hidden md:flex md:items-center md:space-x-8">
+          <div className="hidden lg:flex lg:items-center lg:space-x-6">
             <DropdownMenu 
               title="Resume Tools" 
               items={[
@@ -118,7 +152,8 @@ export const Navbar = () => {
                 { name: 'Branding Tips', path: '/branding-tips' },
                 { name: 'GitHub Tracker', path: '/github-tracker' },
                 { name: 'Resume Analyzer', path: '/resume-analyzer' },
-                { name: 'Profile Setup', path: '/profile-setup' }
+                { name: 'Profile Setup', path: '/profile-setup' },
+                { name: 'Community & Events', path: '/community' }
               ]} 
             />
             <form role="search" onSubmit={handleSearch} className="relative">
@@ -143,7 +178,52 @@ export const Navbar = () => {
           </div>
 
           {/* Right Section: User & Theme Toggle */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden lg:flex items-center space-x-4">
+            {isAuthenticated && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsNotifOpen(!isNotifOpen)}
+                  className="relative rounded-full p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                  aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+                  aria-expanded={isNotifOpen}
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[11px] font-bold text-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+                {isNotifOpen && (
+                  <div className="absolute right-0 z-50 mt-2 w-80 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-800" role="dialog" aria-label="Notifications">
+                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5 dark:border-gray-700">
+                      <p className="text-sm font-semibold">Notifications</p>
+                      {unreadCount > 0 && (
+                        <button type="button" onClick={markNotificationsRead} className="text-xs font-semibold text-indigo-600 dark:text-indigo-300">Mark all read</button>
+                      )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">No alerts yet. Add skills in Profile setup to get internship matches and deadline reminders.</p>
+                      ) : (
+                        notifications.slice(0, 8).map((item) => (
+                          <Link
+                            key={item.id}
+                            to={item.link || '/internships'}
+                            onClick={() => setIsNotifOpen(false)}
+                            className={`block border-b border-gray-50 px-4 py-3 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 ${item.read_at ? 'opacity-70' : ''}`}
+                          >
+                            <p className="font-semibold text-gray-900 dark:text-white">{item.title}</p>
+                            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{item.body}</p>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -172,7 +252,7 @@ export const Navbar = () => {
                       <UserIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-300" />
                     </div>
                   )}
-                  <span className="hidden md:inline">{user?.name || 'Account'}</span>
+                  <span className="hidden lg:inline">{user?.name || 'Account'}</span>
                 </button>
 
                 <AnimatePresence>
@@ -244,7 +324,7 @@ export const Navbar = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center">
+          <div className="lg:hidden flex items-center">
             <button onClick={toggleTheme} className="p-2 mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
               {isDarkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
             </button>
@@ -262,7 +342,7 @@ export const Navbar = () => {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="md:hidden bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800"
+            className="lg:hidden bg-white dark:bg-black border-t border-gray-200 dark:border-gray-800"
           >
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
               <DropdownMenu 
@@ -289,6 +369,7 @@ export const Navbar = () => {
                   { name: 'Internships', path: '/internships' },
                   { name: 'Applications', path: '/applications' },
                   { name: 'Saved', path: '/saved' },
+                  { name: 'Community & Events', path: '/community' },
                   { name: 'Branding Tips', path: '/branding-tips' },
                   { name: 'GitHub Tracker', path: '/github-tracker' },
                   { name: 'Resume Analyzer', path: '/resume-analyzer' },

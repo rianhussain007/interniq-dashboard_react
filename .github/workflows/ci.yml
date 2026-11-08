@@ -38,6 +38,14 @@ jobs:
       - name: Test frontend interactions
         run: npm test
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install backend validation dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
       - name: Install Chromium for browser smoke tests
         run: npx playwright install --with-deps chromium
 
@@ -46,14 +54,6 @@ jobs:
 
       - name: Build frontend
         run: npm run build
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install backend validation dependencies
-        run: python -m pip install -r backend/requirements-dev.txt
 
       - name: Run backend tests
         run: python -m pytest backend/tests -q

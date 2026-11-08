@@ -6,6 +6,11 @@ import psycopg
 from psycopg.rows import dict_row
 
 
+def is_sqlite_backend() -> bool:
+    """SQLite is the zero-configuration local default; PostgreSQL stays opt-in."""
+    return os.getenv("INTERNIQ_STORAGE_BACKEND", "sqlite").strip().lower() == "sqlite"
+
+
 def get_database_url() -> str:
     database_url = os.getenv("DATABASE_URL")
     if not database_url:

@@ -4,6 +4,9 @@ build/
 dist/
 .next/
 .env
+backend/data/*.sqlite3
+backend/data/*.sqlite3-shm
+backend/data/*.sqlite3-wal
 .venv/
 .vitest/
 __pycache__/

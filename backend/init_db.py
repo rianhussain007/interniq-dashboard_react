@@ -2,7 +2,8 @@ import os
 
 from dotenv import load_dotenv
 
-from db import get_db_connection
+from db import get_db_connection, is_sqlite_backend
+from local_store import connection as get_local_db_connection
 
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +14,10 @@ APP_PERMISSIONS_FILE = os.path.join(BACKEND_DIR, "app_permissions.sql")
 
 def init_db() -> None:
     load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+    if is_sqlite_backend():
+        with get_local_db_connection():
+            pass
+        return
     with open(SCHEMA_FILE, "r", encoding="utf-8") as f:
         schema_sql = f.read()
     with open(APP_PERMISSIONS_FILE, "r", encoding="utf-8") as f:
