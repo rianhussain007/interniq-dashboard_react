@@ -1,32 +1,21 @@
 from .base_scraper import BaseScraper
 from typing import List, Dict, Any
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
-import time
-import os
+from .selenium_utils import create_chrome_driver
 
 class NaukriScraper(BaseScraper):
     def __init__(self):
         super().__init__("Naukri")
         self.base_url = "https://www.naukri.com/internship-jobs-in-bangalore"
-        # Correct path to chromedriver assuming the script is run from the project root
-        driver_path = os.path.join(os.getcwd(), 'drivers', 'chromedriver.exe')
-        self.service = Service(executable_path=driver_path)
 
     def scrape(self, max_pages: int = 1) -> List[Dict[str, Any]]:
         print(f"Scraping {self.site_name} for internships in Bangalore...")
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--window-size=1920,1080')
-        options.add_argument("log-level=3") # Suppress console logs
-        options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36')
-
-        driver = webdriver.Chrome(service=self.service, options=options)
+        driver = create_chrome_driver(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36"
+        )
         html_content = None
         try:
             driver.get(self.base_url)

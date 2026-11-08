@@ -1,12 +1,10 @@
 from .base_scraper import BaseScraper
 from typing import List, Dict, Any
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
-import os
+from .selenium_utils import create_chrome_driver
 
 class LinkedInScraper(BaseScraper):
     def __init__(self):
@@ -16,22 +14,11 @@ class LinkedInScraper(BaseScraper):
     def scrape(self, max_pages: int = 1) -> List[Dict[str, Any]]:
         print(f"Scraping {self.site_name} for internships in Bangalore...")
         
-        # Construct the absolute path to the chromedriver
-        script_dir = os.path.dirname(os.path.abspath(__file__))  # scraper/scrapers
-        project_root = os.path.dirname(os.path.dirname(script_dir))  # interniq-dashboard_react
-        driver_path = os.path.join(project_root, 'drivers', 'chromedriver.exe')
-
         # --- Selenium Setup ---
         try:
-            service = Service(executable_path=driver_path)
-            options = webdriver.ChromeOptions()
-            options.add_argument('--headless')
-            options.add_argument('--disable-gpu')
-            options.add_argument('--window-size=1920,1080')
-            driver = webdriver.Chrome(service=service, options=options)
+            driver = create_chrome_driver()
         except Exception as e:
-            print(f"Error starting Selenium WebDriver. Please ensure '{driver_path}' is correct and accessible.")
-            print(f"Error: {e}")
+            print(f"Error starting Selenium WebDriver: {e}")
             return []
 
         all_internships = []

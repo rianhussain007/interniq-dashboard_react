@@ -1,26 +1,23 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Navbar } from './components/Navbar';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-// Import page components
-import HomePage from './pages/HomePage';
-import InternshipsPage from './pages/InternshipsPage';
-import BrandingTipsPage from './pages/BrandingTipsPage';
-import GitHubTrackerPage from './pages/GitHubTrackerPage';
-import ResumeAnalyzerPage from './pages/ResumeAnalyzerPage';
-import ProfileSetupPage from './pages/ProfileSetupPage';
-import LoginPage from './pages/Login';
-import Applications from './pages/Applications';
-import Saved from './pages/Saved';
-
-// New page components
-import ResumeBuilderPage from './pages/ResumeBuilderPage';
-import ResumeScannerPage from './pages/ResumeScannerPage';
-import ResumeTemplatesPage from './pages/ResumeTemplatesPage';
-import InterviewPrepPage from './pages/InterviewPrepPage';
-import NetworkingPage from './pages/NetworkingPage';
-import SalaryGuidePage from './pages/SalaryGuidePage';
+const HomePage = lazy(() => import('./pages/HomePage'));
+const InternshipsPage = lazy(() => import('./pages/InternshipsPage'));
+const BrandingTipsPage = lazy(() => import('./pages/BrandingTipsPage'));
+const GitHubTrackerPage = lazy(() => import('./pages/GitHubTrackerPage'));
+const ResumeAnalyzerPage = lazy(() => import('./pages/ResumeAnalyzerPage'));
+const ProfileSetupPage = lazy(() => import('./pages/ProfileSetupPage'));
+const LoginPage = lazy(() => import('./pages/Login'));
+const Applications = lazy(() => import('./pages/Applications'));
+const Saved = lazy(() => import('./pages/Saved'));
+const ResumeBuilderPage = lazy(() => import('./pages/ResumeBuilderPage'));
+const ResumeScannerPage = lazy(() => import('./pages/ResumeScannerPage'));
+const ResumeTemplatesPage = lazy(() => import('./pages/ResumeTemplatesPage'));
+const InterviewPrepPage = lazy(() => import('./pages/InterviewPrepPage'));
+const NetworkingPage = lazy(() => import('./pages/NetworkingPage'));
+const SalaryGuidePage = lazy(() => import('./pages/SalaryGuidePage'));
 
 // ProtectedRoute component to guard authenticated routes
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -157,7 +154,15 @@ function App() {
         <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-white">
           <Navbar />
           <main>
-            <AppRoutes />
+            <Suspense
+              fallback={
+                <div className="flex min-h-[50vh] items-center justify-center text-sm text-gray-500" role="status">
+                  Loading InternIQ…
+                </div>
+              }
+            >
+              <AppRoutes />
+            </Suspense>
           </main>
         </div>
       </AuthProvider>

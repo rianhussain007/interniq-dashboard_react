@@ -20,9 +20,9 @@ InternIQ is a full-stack internship aggregation and AI career assistant platform
 3. [x] Save internships and track applications.
 4. [x] Add LangChain chunking, Gemini embeddings, pgvector retrieval, and structured mentor output.
 5. [x] Connect the mentor response and recommendations to the dashboard.
-6. [ ] Dockerize and deploy the backend to Cloud Run.
-7. [ ] Deploy the frontend to Firebase Hosting or Cloud Storage + Cloud CDN.
-8. [ ] Schedule scraper jobs with Cloud Scheduler and Cloud Run Jobs.
+6. [x] Containerize the backend and define repeatable Cloud Run service, scraper job, and scheduler deployment.
+7. [ ] Deploy the backend and database to a configured GCP project.
+8. [ ] Deploy the frontend to Firebase Hosting or Cloud Storage + Cloud CDN.
 
 ## Tech Stack
 
@@ -99,6 +99,21 @@ Initialize the PostgreSQL schema before running internship routes:
 python init_db.py
 ```
 
+The migration grants application CRUD access to a PostgreSQL role named `interniq_app`. Create that role in the local database before initialization (use a unique password if you connect as the role):
+
+```sql
+CREATE ROLE interniq_app LOGIN PASSWORD 'replace-with-a-local-password';
+```
+
+Build and start the production container locally (the health route does not require provider or database credentials):
+
+```bash
+docker build -t interniq-api .
+docker run --rm -p 8080:8080 interniq-api
+```
+
+Then check `http://localhost:8080/api/health`. The image includes Chromium and ChromeDriver so the same image can run the Selenium scrapers as a Cloud Run Job. On Windows, the scraper uses `drivers/chromedriver.exe` when present; elsewhere Selenium Manager can resolve a driver, or set `CHROME_BIN` and `CHROMEDRIVER_PATH` explicitly.
+
 The scraper automatically refreshes the RAG index after upserting postings. To build or refresh it manually after changing the embedding model or chunk settings:
 
 ```bash
@@ -169,40 +184,72 @@ Knowledge sources currently indexed:
 
 The default embedding model is `gemini-embedding-2-preview`, used through LangChain's text embedding interface. The model remains configurable; changing it causes existing chunks to be re-embedded on the next reindex.
 
-## GCP Deployment Target
+## GCP Deployment
+
+The repository includes a deploy script at `deploy/gcp/deploy-backend.sh`. It builds the Docker image with Cloud Build, runs the database schema migration as a one-off Cloud Run Job, deploys the public API service, deploys a separate scraper Cloud Run Job, grants that job invoker access to a dedicated scheduler identity, and creates or updates a daily Cloud Scheduler trigger. The API service is public at the Cloud Run IAM layer for browser access; its private data routes still require verified Supabase sessions, and admin operations still require `INTERNIQ_ADMIN_TOKEN`.
+
+Before running it, create a Cloud SQL PostgreSQL database named `interniq` with the `vector` extension available, and create an `interniq_app` login role. For example, connect as the Cloud SQL `postgres` account and run `CREATE ROLE interniq_app LOGIN PASSWORD 'use-a-unique-generated-password';`. The migration job applies `backend/schema.sql` and grants this role only the table and sequence permissions the application uses. Use the Cloud SQL `postgres` account only for the migration URL; the API and scraper use the restricted app account. Store these values as Secret Manager secrets, each with at least one enabled version:
+
+- `interniq-database-url`
+- `interniq-migration-database-url`
+- `groq-api-key`
+- `gemini-api-key`
+- `interniq-admin-token`
+
+Create each secret and add a version from protected local files outside the repository. This keeps credentials out of shell history and source control:
+
+```bash
+gcloud secrets create interniq-database-url --replication-policy=automatic --project "$PROJECT_ID"
+gcloud secrets create interniq-migration-database-url --replication-policy=automatic --project "$PROJECT_ID"
+gcloud secrets create groq-api-key --replication-policy=automatic --project "$PROJECT_ID"
+gcloud secrets create gemini-api-key --replication-policy=automatic --project "$PROJECT_ID"
+gcloud secrets create interniq-admin-token --replication-policy=automatic --project "$PROJECT_ID"
+gcloud secrets versions add interniq-database-url --data-file="/secure/path/interniq-app-database-url.txt" --project "$PROJECT_ID"
+gcloud secrets versions add interniq-migration-database-url --data-file="/secure/path/interniq-migration-database-url.txt" --project "$PROJECT_ID"
+gcloud secrets versions add groq-api-key --data-file="/secure/path/groq-api-key.txt" --project "$PROJECT_ID"
+gcloud secrets versions add gemini-api-key --data-file="/secure/path/gemini-api-key.txt" --project "$PROJECT_ID"
+gcloud secrets versions add interniq-admin-token --data-file="/secure/path/interniq-admin-token.txt" --project "$PROJECT_ID"
+```
+
+For Cloud SQL, set `interniq-database-url` to the `interniq_app` PostgreSQL URL and `interniq-migration-database-url` to the `postgres` admin URL. Both use the Cloud SQL Unix socket, for example `postgresql://USER:PASSWORD@/interniq?host=/cloudsql/PROJECT_ID:REGION:INSTANCE`. URL-encode reserved characters in the username or password. For a database hosted elsewhere, use that provider's TLS-enabled URLs for both roles and leave `CLOUDSQL_INSTANCE` empty.
+
+The deploying identity needs permissions to enable services, build and push images, create/update Cloud Run resources and service accounts, manage the Scheduler job, and grant IAM bindings. The script creates `interniq-api`, `interniq-migration`, `interniq-scraper`, and `interniq-scheduler` service accounts if absent. The API identity can read its database URL and provider/admin secrets; the migration identity can read only the admin database URL; the scraper can read the app database URL and Gemini key; the scheduler identity can invoke only the scraper job. The first three identities receive Cloud SQL Client when `CLOUDSQL_INSTANCE` is set. The deployer also needs `iam.serviceAccounts.actAs` for these service accounts.
+
+Run the script in an authenticated Google Cloud CLI shell (Google Cloud Shell builds the image remotely, so it does not need a local Docker daemon):
+
+```bash
+export PROJECT_ID="your-gcp-project-id"
+export REGION="asia-south1"
+export FRONTEND_ORIGIN="https://your-firebase-project.web.app"
+export SUPABASE_URL="https://your-project-ref.supabase.co"
+export SUPABASE_ANON_KEY="your-supabase-publishable-or-anon-key"
+export CLOUDSQL_INSTANCE="your-gcp-project-id:asia-south1:interniq-db"
+bash deploy/gcp/deploy-backend.sh
+```
+
+Optional settings include `SCRAPE_SCHEDULE` (default `0 3 * * *`), `SCHEDULER_TIME_ZONE` (default `Asia/Kolkata`), `SERVICE`, `MIGRATION_JOB`, `SCRAPER_JOB`, and `IMAGE_TAG`. The script applies the schema before deploying the API. After deployment, run the scraper once to populate or refresh internship data:
+
+```bash
+gcloud run jobs execute interniq-scraper --region "$REGION" --project "$PROJECT_ID" --wait
+```
+
+The script and commands use Cloud Run Jobs with Cloud Scheduler's OAuth identity to execute scheduled scraping. See Google's [Cloud Run job deployment guide](https://cloud.google.com/run/docs/create-jobs) and [job scheduling guide](https://cloud.google.com/run/docs/execute/jobs-on-schedule) for permissions and execution details.
 
 ### Frontend
 
-Use Firebase Hosting or Cloud Storage + Cloud CDN. Configure:
+The repository includes Firebase Hosting configuration in `firebase.json`, including SPA rewrites for React Router, long-lived caching for hashed Vite assets, and basic browser security headers. Create/enable a Hosting site in Firebase, then build with the public runtime settings and deploy:
 
-```env
-VITE_API_BASE_URL="https://your-cloud-run-backend-url"
+```bash
+npm install --global firebase-tools
+firebase login
+export VITE_API_BASE_URL="https://your-cloud-run-backend-url"
+export VITE_SUPABASE_URL="https://your-project-ref.supabase.co"
+export VITE_SUPABASE_ANON_KEY="your-supabase-publishable-or-anon-key"
+export VITE_GOOGLE_CLIENT_ID="your-google-oauth-client-id"
+npm run deploy:hosting -- --project "$PROJECT_ID"
 ```
 
-### Backend
-
-Use Cloud Run with a containerized FastAPI service. Runtime configuration should come from Cloud Run environment variables and Secret Manager:
-
-```env
-ALLOWED_ORIGINS="https://your-firebase-project.web.app"
-GROQ_API_KEY="secret-manager-value"
-GROQ_MODEL="openai/gpt-oss-20b"
-SUPABASE_URL="https://your-project-ref.supabase.co"
-SUPABASE_ANON_KEY="secret-manager-value"
-INTERNIQ_ADMIN_TOKEN="secret-manager-value"
-```
-
-```env
-DATABASE_URL="postgresql://..."
-```
-
-### Database
-
-Use Cloud SQL PostgreSQL with `pgvector` enabled.
-
-### Scraper Automation
-
-Use Cloud Scheduler to trigger a Cloud Run Job that runs the scraper on a fixed cadence. The pipeline writes normalized internship records to PostgreSQL, then chunks and indexes them in pgvector.
+The frontend environment values are embedded in the static build. Only use the Supabase public anon/publishable key here; never put provider API keys, the database URL, or the admin token in `VITE_*` variables. The configured frontend origin must be included in the Cloud Run `ALLOWED_ORIGINS` value, and the Supabase Auth redirect URLs must include the Firebase Hosting domain.
 
 ### Storage And Monitoring
 
@@ -212,6 +259,6 @@ Use Cloud Scheduler to trigger a Cloud Run Job that runs the scraper on a fixed 
 
 ## Notes
 
-The local scrape → chunk → embed → retrieve → structured response workflow is implemented. Containerization, hosted deployment, and scheduled scraper operations remain next steps.
+The local scrape → chunk → embed → retrieve → structured response workflow is implemented. The container and repeatable Cloud Run deployment path are included; executing the first hosted deployment still requires a configured GCP project, database, secrets, and deployment identity.
 
 Supabase Auth provides the email/password and Google sessions. Private API routes verify the bearer token and enforce the authenticated user ID; database row-level security policies are restored when the schema runs on Supabase.
