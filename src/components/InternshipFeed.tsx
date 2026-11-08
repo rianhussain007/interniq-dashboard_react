@@ -5,6 +5,7 @@ import { apiRequest, internshipSearchPath, semanticInternshipSearchPath, type Ap
 import { useAuth } from '../contexts/AuthContext';
 
 const PAGE_SIZE = 24;
+const PAGE_FETCH_SIZE = PAGE_SIZE + 1;
 
 const getDaysUntilDeadline = (deadline: string) => {
   const [year, month, day] = deadline.split('-').map(Number);
@@ -212,7 +213,7 @@ export const InternshipFeed = () => {
           source,
           mode,
           sort,
-          limit: PAGE_SIZE,
+          limit: PAGE_FETCH_SIZE,
           offset: 0,
         };
         const searchPath = searchMode === 'semantic'
@@ -220,9 +221,10 @@ export const InternshipFeed = () => {
           : internshipSearchPath(searchParams);
         const data = await apiRequest<Internship[]>(searchPath, { signal: controller.signal });
         if (!controller.signal.aborted) {
-          setAllInternships(data);
-          setOffset(data.length);
-          setHasMore(data.length === PAGE_SIZE);
+          const visiblePage = data.slice(0, PAGE_SIZE);
+          setAllInternships(visiblePage);
+          setOffset(visiblePage.length);
+          setHasMore(data.length > PAGE_SIZE);
         }
       } catch (err: unknown) {
         if (controller.signal.aborted) return;
@@ -257,7 +259,7 @@ export const InternshipFeed = () => {
         source,
         mode,
         sort,
-        limit: PAGE_SIZE,
+        limit: PAGE_FETCH_SIZE,
         offset,
       };
       const searchPath = searchMode === 'semantic'
@@ -266,12 +268,13 @@ export const InternshipFeed = () => {
       const data = await apiRequest<Internship[]>(searchPath, { signal: controller.signal });
       if (controller.signal.aborted) return;
 
+      const visiblePage = data.slice(0, PAGE_SIZE);
       setAllInternships((current) => {
         const knownIds = new Set(current.map((internship) => internship.id));
-        return [...current, ...data.filter((internship) => !knownIds.has(internship.id))];
+        return [...current, ...visiblePage.filter((internship) => !knownIds.has(internship.id))];
       });
-      setOffset((current) => current + data.length);
-      setHasMore(data.length === PAGE_SIZE);
+      setOffset((current) => current + visiblePage.length);
+      setHasMore(data.length > PAGE_SIZE);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       setPaginationError(err instanceof Error ? err.message : 'Could not load more internships.');
