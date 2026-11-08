@@ -14,6 +14,7 @@ export type Internship = {
   posted_date?: string | null;
   deadline?: string | null;
   description?: string;
+  similarity?: number;
 };
 
 export type ApplicationRecord = {

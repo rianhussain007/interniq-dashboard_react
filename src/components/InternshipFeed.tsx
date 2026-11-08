@@ -27,7 +27,17 @@ const InternshipCard = ({
           {internship.source}
         </span>
       </div>
-      <p className="text-md text-indigo-600 dark:text-indigo-400 font-semibold mt-1">{internship.company}</p>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <p className="text-md text-indigo-600 dark:text-indigo-400 font-semibold">{internship.company}</p>
+        {typeof internship.similarity === 'number' && Number.isFinite(internship.similarity) && (
+          <span
+            className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-200"
+            title="Similarity to your AI search. This is a ranking signal, not a probability."
+          >
+            AI similarity {internship.similarity.toFixed(2)}
+          </span>
+        )}
+      </div>
       <div className="flex items-center text-gray-600 dark:text-gray-400 mt-2 text-sm">
         <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
         <span>{internship.location}</span>
@@ -37,6 +47,11 @@ const InternshipCard = ({
         <span>{internship.mode || 'Work mode not disclosed'}</span>
       </div>
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Stipend: {internship.stipend || 'Not disclosed'}</p>
+      {internship.description?.trim() && (
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-gray-600 dark:text-gray-400">
+          {internship.description}
+        </p>
+      )}
       {internship.deadline && (
         <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <CalendarDays className="h-4 w-4" />
